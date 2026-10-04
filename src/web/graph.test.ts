@@ -2,9 +2,18 @@ import { describe, expect, it } from "vitest";
 import type { ReviewedFile } from "../server/review.ts";
 import { entriesByDir, layoutGraph, type Placed } from "./graph.ts";
 
-const file = (path: string, added = 1): ReviewedFile => ({ path, status: "M", added, deleted: 0, binary: false, untracked: false, mtime: null, review: null, reviewedAt: null });
+const file = (path: string, added = 1): ReviewedFile => ({ path, status: "M", added, deleted: 0, binary: false, untracked: false, mtime: null, lines: 10, review: null, reviewedAt: null });
 const names = (p: Placed): unknown => (p.children.length ? { [p.node.name]: p.children.map(names) } : p.node.name);
 const measure = () => 50;
+
+describe("changedShare", () => {
+  it("is the touched share of old and new lines", async () => {
+    const { changedShare } = await import("../shared.ts");
+    expect(changedShare({ status: "M", added: 5, deleted: 5, lines: 100, binary: false })).toBeCloseTo(10 / 105);
+    expect(changedShare({ status: "A", added: 5, deleted: 0, lines: 5, binary: false })).toBe(1);
+    expect(changedShare({ status: "M", added: 0, deleted: 0, lines: 0, binary: false })).toBe(0);
+  });
+});
 
 describe("layoutGraph", () => {
   const files = [file("src/server/a.ts", 10), file("src/web/b.tsx", 30), file("README.md")];

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "preact/hooks";
 import type { ReviewedFile } from "../server/review.ts";
+import { changedShare } from "../shared.ts";
 import { entriesByDir, layoutGraph, type GraphNode, type Placed } from "./graph.ts";
 import { usePersisted } from "./hooks.ts";
 import { plural } from "./util.ts";
@@ -27,6 +28,18 @@ function textWidth(text: string, font: string): number {
   ctx.font = font;
   return ctx.measureText(text).width;
 }
+
+/** A pie slice from 12 o'clock, clockwise; tiny changes still get a visible sliver. */
+function pie(cx: number, cy: number, r: number, share: number): string | null {
+  const f = Math.max(0.08, share);
+  if (f >= 0.995) return null;
+  const a = f * 2 * Math.PI;
+  const x = cx + r * Math.sin(a);
+  const y = cy - r * Math.cos(a);
+  return `M${cx},${cy} L${cx},${cy - r} A${r},${r} 0 ${f > 0.5 ? 1 : 0} 1 ${x.toFixed(2)},${y.toFixed(2)} Z`;
+}
+
+const pct = (share: number) => (share >= 0.995 ? "all" : share < 0.01 ? "under 1%" : `about ${Math.round(share * 100)}%`);
 
 const short = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n));
 const done = (files: ReviewedFile[]) => files.filter((f) => f.review === "reviewed").length;
@@ -172,6 +185,7 @@ export function MapView(props: Props) {
         <span><i class="ld s-R" />renamed</span>
         <span><i class="ld done" />reviewed</span>
         <span><i class="ld again" />edited again</span>
+        <span><i class="ld pie" />part of the file changed</span>
         <span class="muted">thicker line = more changed · click a dot to mark reviewed · click a name to open it</span>
         <span class="muted"><kbd>j</kbd> <kbd>k</kbd> select · <kbd>enter</kbd> open · <kbd>space</kbd> reviewed · <kbd>g</kbd> files</span>
       </div>
@@ -233,6 +247,8 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
   const seen = props.recent.get(f.path) ?? 0;
   const fresh = Date.now() - Math.max(seen, f.mtime ?? 0) < FRESH_MS;
   const threads = props.threadCounts.get(f.path) ?? 0;
+  const share = changedShare(f);
+  const slice = pie(p.x + 7, p.y, 6.5, share);
   const nameW = textWidth(n.name, FONT);
   const stat = statText(f);
   const statX = p.x + 22 + nameW + 10;
@@ -258,10 +274,23 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
           props.onReview([f], f.review !== "reviewed");
         }}
       >
-        <title>{f.review === "reviewed" ? "Reviewed. Click to undo" : "Click to mark reviewed"}</title>
+        <title>
+          {f.status === "A" ? "New file" : f.status === "D" ? "Deleted" : `${pct(share)} of the file changed`}
+          {f.review === "reviewed" ? "\nReviewed. Click to undo" : "\nClick to mark reviewed"}
+        </title>
         <circle cx={p.x + 7} cy={p.y} r={10} class="dot-hit" />
-        <circle cx={p.x + 7} cy={p.y} r={6.5} class="dot-fill" />
-        {f.review === "reviewed" && <path d={`M${p.x + 3.8},${p.y + 0.3} l2.2,2.2 l4,-4.6`} class="dot-check" />}
+        {f.review === "reviewed" ? (
+          <>
+            <circle cx={p.x + 7} cy={p.y} r={6.5} class="dot-fill" />
+            <path d={`M${p.x + 3.8},${p.y + 0.3} l2.2,2.2 l4,-4.6`} class="dot-check" />
+          </>
+        ) : (
+          <>
+            {/* Filled share = how much of the file changed. */}
+            <circle cx={p.x + 7} cy={p.y} r={6.5} class={slice ? "dot-track" : "dot-fill"} />
+            {slice && <path d={slice} class="dot-slice" />}
+          </>
+        )}
       </g>
       {fresh && <circle cx={p.x + 7} cy={p.y} r={9.5} class="fresh-ring" />}
       <text x={p.x + 22} y={p.y + 4.5} class={`fname ${f.status === "D" ? "deleted" : ""}`}>

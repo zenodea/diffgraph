@@ -604,12 +604,18 @@ kbd {
 .gnode.s-M .dot-fill, .gnode.s-T .dot-fill { fill: var(--mod); }
 .gnode.s-D .dot-fill { fill: var(--del); }
 .gnode.s-R .dot-fill, .gnode.s-C .dot-fill { fill: var(--ren); }
-.dot:hover .dot-fill { stroke: var(--done); stroke-width: 3; }
+.dot-track { stroke-width: 1.5; }
+.gnode.s-M .dot-track, .gnode.s-T .dot-track { fill: color-mix(in srgb, var(--mod) 18%, var(--bg)); stroke: var(--mod); }
+.gnode.s-R .dot-track, .gnode.s-C .dot-track { fill: color-mix(in srgb, var(--ren) 18%, var(--bg)); stroke: var(--ren); }
+.gnode.s-M .dot-slice, .gnode.s-T .dot-slice { fill: var(--mod); }
+.gnode.s-R .dot-slice, .gnode.s-C .dot-slice { fill: var(--ren); }
+.dot:hover .dot-fill, .dot:hover .dot-track { stroke: var(--done); stroke-width: 3; }
+.ld.pie { background: conic-gradient(var(--mod) 0 35%, color-mix(in srgb, var(--mod) 18%, var(--bg)) 35% 100%); border: 1.5px solid var(--mod); }
 /* Reviewed goes grey: colour on the map always means "still needs you". */
 .gnode.r-reviewed .dot-fill { fill: var(--faint); }
 .dot-check { fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .gnode.r-reviewed .fname, .gnode.r-reviewed .fstat { opacity: 0.45; }
-.gnode.r-changed .dot-fill { stroke: var(--warn); stroke-width: 3; }
+.gnode.r-changed .dot-fill, .gnode.r-changed .dot-track { stroke: var(--warn); stroke-width: 3; }
 .again-tag rect { fill: var(--warn-bg); }
 .again-tag text { fill: var(--warn); font-size: 11px; font-weight: 600; }
 .qcount path { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linejoin: round; }

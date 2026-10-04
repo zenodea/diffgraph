@@ -33,6 +33,8 @@ export interface ChangedFile {
   untracked: boolean;
   /** Working-file mtime (ms); null when deleted. */
   mtime: number | null;
+  /** Lines in the working file now; null when deleted or binary. */
+  lines: number | null;
 }
 
 export interface RepoState {
@@ -133,7 +135,9 @@ export async function changedFiles(root: string, from: string): Promise<ChangedF
     [...files.values()].map(async (f) => {
       if (f.status === "D") return;
       try {
-        f.mtime = (await stat(join(root, f.path))).mtimeMs;
+        const s = await stat(join(root, f.path));
+        f.mtime = s.mtimeMs;
+        if (!f.binary) f.lines = await cachedLines(join(root, f.path), `${s.mtimeMs}:${s.size}`);
       } catch {}
     }),
   );
@@ -141,8 +145,20 @@ export async function changedFiles(root: string, from: string): Promise<ChangedF
 }
 
 function base(path: string, status: Status, oldPath?: string): ChangedFile {
-  return { path, ...(oldPath && { oldPath }), status, added: 0, deleted: 0, binary: false, untracked: false, mtime: null };
+  return { path, ...(oldPath && { oldPath }), status, added: 0, deleted: 0, binary: false, untracked: false, mtime: null, lines: null };
 }
+
+const lineCache = new Map<string, { key: string; lines: number }>();
+
+async function cachedLines(file: string, key: string): Promise<number | null> {
+  const hit = lineCache.get(file);
+  if (hit?.key === key) return hit.lines;
+  const { lines, binary } = await countLines(file);
+  if (binary) return null;
+  lineCache.set(file, { key, lines });
+  return lines;
+}
+
 
 async function countLines(file: string): Promise<{ lines: number; binary: boolean }> {
   try {

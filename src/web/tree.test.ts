@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ReviewedFile as ChangedFile } from "../server/review.ts";
 import { buildTree, visibleOrder } from "./tree.ts";
 
-const file = (path: string): ChangedFile => ({ path, status: "M", added: 1, deleted: 0, binary: false, untracked: false, mtime: null, review: null, reviewedAt: null });
+const file = (path: string): ChangedFile => ({ path, status: "M", added: 1, deleted: 0, binary: false, untracked: false, mtime: null, lines: 10, review: null, reviewedAt: null });
 
 describe("buildTree", () => {
   it("compacts single-child folder chains and sorts folders first", () => {
