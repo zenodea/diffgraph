@@ -28,6 +28,8 @@ const defaults: Config = {
     command: [
       "claude", "-p",
       "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+      // Q&A runs shouldn't leave transcripts behind (they'd show up as "why" sessions).
+      "--no-session-persistence",
       "--allowedTools", "Read,Grep,Glob",
       "--disallowedTools", "Edit,Write,MultiEdit,NotebookEdit,Bash",
     ],

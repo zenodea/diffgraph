@@ -1,9 +1,13 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
+import type { Anchor, Thread } from "../server/ask.ts";
+import type { DiffLine } from "../server/diff.ts";
 import type { FileDiff } from "../server/fileDiff.ts";
 import type { Scope } from "../server/git.ts";
 import type { ReviewedFile } from "../server/review.ts";
 import { api, repoId } from "./api.ts";
-import { DiffView, type ViewMode } from "./DiffView.tsx";
+import { DiffView, lineKey, type ViewMode } from "./DiffView.tsx";
+import { useKeys } from "./hooks.ts";
+import { anchorLabel, Composer, ThreadCard, type Target } from "./Threads.tsx";
 import { Check } from "./icons.tsx";
 import { DiffStat, StatusBadge } from "./Tree.tsx";
 import { WhyPanel } from "./WhyPanel.tsx";
@@ -15,15 +19,39 @@ export const modes: { id: ViewMode; label: string }[] = [
   { id: "full", label: "Full file" },
 ];
 
+export interface AskRequest {
+  path: string;
+  anchor: Anchor | null;
+  code: string;
+  question: string;
+  target: Target;
+}
+
 interface Props {
   file: ReviewedFile;
   scope: Scope;
   mode: ViewMode;
   setMode: (m: ViewMode) => void;
   onReview: (reviewed: boolean) => void;
+  threads: Thread[];
+  agent: string | null;
+  onAsk: (req: AskRequest) => Promise<void>;
+  onReply: (thread: Thread, question: string, target: Target) => Promise<void>;
+  onDeleteThread: (thread: Thread) => void;
 }
 
-export function FilePane({ file, scope, mode, setMode, onReview }: Props) {
+/** Turns selected diff lines into an anchor (new-side numbers when there are any) and their text. */
+function selectionAnchor(lines: DiffLine[]): { anchor: Anchor; code: string } | null {
+  if (!lines.length) return null;
+  const news = lines.filter((l) => l.n !== null).map((l) => l.n!);
+  const olds = lines.filter((l) => l.o !== null).map((l) => l.o!);
+  const anchor: Anchor = news.length
+    ? { side: "new", start: Math.min(...news), end: Math.max(...news) }
+    : { side: "old", start: Math.min(...olds), end: Math.max(...olds) };
+  return { anchor, code: lines.map((l) => (l.t === " " ? " " : l.t) + l.s).join("\n") };
+}
+
+export function FilePane({ file, scope, mode, setMode, onReview, threads, agent, onAsk, onReply, onDeleteThread }: Props) {
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [onlySinceReview, setOnlySinceReview] = useState(false);
@@ -32,7 +60,44 @@ export function FilePane({ file, scope, mode, setMode, onReview }: Props) {
   // Refetch when the file itself changes on disk, not just when another one is picked.
   const version = `${file.path}|${file.mtime}|${file.added}|${file.deleted}|${file.review}`;
 
-  useEffect(() => setOnlySinceReview(false), [file.path]);
+  const [sel, setSel] = useState<{ anchor: string; focus: string } | null>(null);
+  const [focusComposer, setFocusComposer] = useState(0);
+
+  useEffect(() => {
+    setOnlySinceReview(false);
+    setSel(null);
+  }, [file.path]);
+
+  const lines = useMemo(() => diff?.hunks.flatMap((h) => h.lines) ?? [], [diff]);
+  const selectedLines = useMemo(() => {
+    if (!sel) return [];
+    const a = lines.findIndex((l) => lineKey(l) === sel.anchor);
+    const b = lines.findIndex((l) => lineKey(l) === sel.focus);
+    if (a === -1 || b === -1) return [];
+    return lines.slice(Math.min(a, b), Math.max(a, b) + 1);
+  }, [sel, lines]);
+  const selection = selectionAnchor(selectedLines);
+  const selectedKeys = useMemo(() => new Set(selectedLines.map(lineKey)), [selectedLines]);
+
+  useKeys((e) => {
+    if (e.key === "a") setFocusComposer((n) => n + 1);
+    else if (e.key === "Escape" && sel) setSel(null);
+    else return;
+    e.preventDefault();
+  });
+
+  const interaction = {
+    selected: selectedKeys,
+    onLine: (l: DiffLine, extend: boolean) => {
+      const k = lineKey(l);
+      setSel(extend && sel ? { anchor: sel.anchor, focus: k } : sel?.anchor === k && sel.focus === k ? null : { anchor: k, focus: k });
+      setFocusComposer((n) => n + 1);
+    },
+    threads,
+    renderThread: (t: Thread, outdated: boolean) => (
+      <ThreadCard thread={t} agent={agent} showCode={outdated} onReply={(q, target) => onReply(t, q, target)} onDelete={() => onDeleteThread(t)} />
+    ),
+  };
 
   useEffect(() => {
     let live = true;
@@ -87,8 +152,31 @@ export function FilePane({ file, scope, mode, setMode, onReview }: Props) {
       ) : !diff || stale ? (
         <div class="diff-note muted">Loading…</div>
       ) : (
-        <DiffView diff={diff} mode={since && mode === "full" ? "unified" : mode} onFullFile={() => setMode("full")} />
+        <DiffView diff={diff} mode={since && mode === "full" ? "unified" : mode} onFullFile={() => setMode("full")} interaction={interaction} />
       )}
+
+      <div class="ask-bar">
+        <div class="ask-target">
+          {selection ? (
+            <>
+              Asking about <b>{anchorLabel(selection.anchor)}</b>
+              <button class="link" onClick={() => setSel(null)}>clear</button>
+            </>
+          ) : (
+            <>Asking about <b>this file</b> <span class="muted">· click line numbers to pick lines · <kbd>a</kbd> to type</span></>
+          )}
+        </div>
+        <Composer
+          label={selection ? anchorLabel(selection.anchor) : "this file"}
+          agent={agent}
+          focusKey={focusComposer || undefined}
+          onCancel={() => setSel(null)}
+          onAsk={async (question, target) => {
+            await onAsk({ path: file.path, anchor: selection?.anchor ?? null, code: selection?.code ?? "", question, target });
+            setSel(null);
+          }}
+        />
+      </div>
     </>
   );
 }

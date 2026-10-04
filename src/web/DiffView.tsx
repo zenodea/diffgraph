@@ -1,4 +1,6 @@
-import { useMemo, useState } from "preact/hooks";
+import { createContext, type ComponentChildren } from "preact";
+import { useContext, useMemo, useState } from "preact/hooks";
+import type { Thread } from "../server/ask.ts";
 import type { DiffLine, Hunk } from "../server/diff.ts";
 import type { FileDiff } from "../server/fileDiff.ts";
 import { EMPTY_TREE } from "../shared.ts";
@@ -6,6 +8,70 @@ import { repoId, token } from "./api.ts";
 import { changedRange, highlightLines, languageFor, markRange } from "./highlight.ts";
 
 export type ViewMode = "unified" | "split" | "full";
+
+export const lineKey = (l: DiffLine) => `${l.o ?? ""}:${l.n ?? ""}`;
+
+/** Selection and question threads, shared by all three views. */
+export interface DiffInteraction {
+  selected: Set<string>;
+  onLine: (line: DiffLine, extend: boolean) => void;
+  threads: Thread[];
+  renderThread: (t: Thread, outdated: boolean) => ComponentChildren;
+}
+
+const Interaction = createContext<DiffInteraction>({ selected: new Set(), onLine: () => {}, threads: [], renderThread: () => null });
+
+/** Which line each thread sits under; threads whose lines are gone stay unplaced. */
+function placeThreads(threads: Thread[], lines: DiffLine[], keyFor: (l: DiffLine) => string = lineKey) {
+  const at = new Map<string, Thread[]>();
+  const unplaced: Thread[] = [];
+  for (const t of threads) {
+    const a = t.anchor;
+    const line = a && lines.find((l) => (a.side === "new" ? l.n === a.end : l.o === a.end && l.t === "-"));
+    if (!line) unplaced.push(t);
+    else {
+      const k = keyFor(line);
+      at.set(k, [...(at.get(k) ?? []), t]);
+    }
+  }
+  return { at, unplaced };
+}
+
+function ThreadRows({ threads, cols }: { threads: Thread[] | undefined; cols: number }) {
+  const ctx = useContext(Interaction);
+  if (!threads?.length) return null;
+  return (
+    <>
+      {threads.map((t) => (
+        <tr key={t.id} class="thread-row">
+          <td colSpan={cols}>{ctx.renderThread(t, false)}</td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function Unplaced({ threads }: { threads: Thread[] }) {
+  const ctx = useContext(Interaction);
+  if (!threads.length) return null;
+  return <div class="unplaced">{threads.map((t) => <div key={t.id}>{ctx.renderThread(t, !!t.anchor)}</div>)}</div>;
+}
+
+function Num({ line, class: cls = "", children }: { line: DiffLine | null; class?: string; children: ComponentChildren }) {
+  const ctx = useContext(Interaction);
+  if (!line) return <td class={`num ${cls}`} />;
+  return (
+    <td
+      class={`num pick ${cls}`}
+      title="Click to select, shift-click for a range, then ask about it"
+      // Keep focus in the question box while picking lines.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => ctx.onLine(line, e.shiftKey)}
+    >
+      {children}
+    </td>
+  );
+}
 
 interface Line extends DiffLine {
   html: string;
@@ -60,14 +126,30 @@ function changeRuns(lines: DiffLine[]): { dels: number[]; adds: number[] }[] {
   return runs;
 }
 
-export function DiffView({ diff, mode, onFullFile }: { diff: FileDiff; mode: ViewMode; onFullFile: () => void }) {
+export function DiffView({ diff, mode, onFullFile, interaction }: { diff: FileDiff; mode: ViewMode; onFullFile: () => void; interaction: DiffInteraction }) {
   const hunks = useMemo(() => prepare(diff.hunks, diff.file.path), [diff]);
   const [forceLarge, setForceLarge] = useState(false);
 
-  if (diff.binary) return <BinaryView diff={diff} />;
-  if (diff.tooLarge) return <div class="diff-note">This diff is too large to show here.</div>;
+  return (
+    <Interaction.Provider value={interaction}>
+      <DiffBody diff={diff} hunks={hunks} mode={mode} onFullFile={onFullFile} forceLarge={forceLarge} setForceLarge={setForceLarge} />
+    </Interaction.Provider>
+  );
+}
+
+function DiffBody({ diff, hunks, mode, onFullFile, forceLarge, setForceLarge }: { diff: FileDiff; hunks: PreparedHunk[]; mode: ViewMode; onFullFile: () => void; forceLarge: boolean; setForceLarge: (v: boolean) => void }) {
+  const ctx = useContext(Interaction);
+  // No lines to hang questions on: show them all above the note.
+  const note = (body: ComponentChildren) => (
+    <>
+      <Unplaced threads={ctx.threads} />
+      {body}
+    </>
+  );
+  if (diff.binary) return note(<BinaryView diff={diff} />);
+  if (diff.tooLarge) return note(<div class="diff-note">This diff is too large to show here.</div>);
   if (!hunks.length) {
-    return <div class="diff-note">{diff.file.status === "R" ? "Renamed, content unchanged." : "No line changes (mode or whitespace only)."}</div>;
+    return note(<div class="diff-note">{diff.file.status === "R" ? "Renamed, content unchanged." : "No line changes (mode or whitespace only)."}</div>);
   }
   const lineCount = hunks.reduce((n, h) => n + h.lines.length, 0);
   if (lineCount > 6000 && !forceLarge) {
@@ -110,9 +192,12 @@ function Code({ line }: { line: Line }) {
 const sign = { " ": " ", "+": "+", "-": "−" };
 
 function UnifiedView({ hunks, onFullFile }: { hunks: PreparedHunk[]; onFullFile: () => void }) {
+  const ctx = useContext(Interaction);
+  const { at, unplaced } = placeThreads(ctx.threads, hunks.flatMap((h) => h.lines));
   let prevEnd = 1;
   return (
     <div class="diff-scroll">
+      <Unplaced threads={unplaced} />
       <table class="diff unified">
         <tbody>
           {hunks.map((h, hi) => {
@@ -120,14 +205,15 @@ function UnifiedView({ hunks, onFullFile }: { hunks: PreparedHunk[]; onFullFile:
             prevEnd = h.newStart + h.newLines;
             return [
               header,
-              ...h.lines.map((l, i) => (
-                <tr key={`${hi}-${i}`} class={`ln t${l.t === " " ? "c" : l.t === "+" ? "a" : "d"}`} data-new={l.n ?? undefined} data-old={l.o ?? undefined}>
-                  <td class="num">{l.o ?? ""}</td>
-                  <td class="num">{l.n ?? ""}</td>
+              ...h.lines.map((l, i) => [
+                <tr key={`${hi}-${i}`} class={`ln t${l.t === " " ? "c" : l.t === "+" ? "a" : "d"} ${ctx.selected.has(lineKey(l)) ? "sel" : ""}`} data-new={l.n ?? undefined} data-old={l.o ?? undefined}>
+                  <Num line={l}>{l.o ?? ""}</Num>
+                  <Num line={l}>{l.n ?? ""}</Num>
                   <td class="sign">{sign[l.t]}</td>
                   <Code line={l} />
-                </tr>
-              )),
+                </tr>,
+                <ThreadRows key={`t${hi}-${i}`} threads={at.get(lineKey(l))} cols={4} />,
+              ]),
             ];
           })}
         </tbody>
@@ -137,9 +223,12 @@ function UnifiedView({ hunks, onFullFile }: { hunks: PreparedHunk[]; onFullFile:
 }
 
 function SplitView({ hunks, onFullFile }: { hunks: PreparedHunk[]; onFullFile: () => void }) {
+  const ctx = useContext(Interaction);
+  const { at, unplaced } = placeThreads(ctx.threads, hunks.flatMap((h) => h.lines));
   let prevEnd = 1;
   return (
     <div class="diff-scroll">
+      <Unplaced threads={unplaced} />
       <table class="diff split">
         <colgroup>
           <col class="num-col" /><col /><col class="num-col" /><col />
@@ -165,14 +254,19 @@ function SplitView({ hunks, onFullFile }: { hunks: PreparedHunk[]; onFullFile: (
             }
             return [
               header,
-              ...rows.map(([a, b], ri) => (
-                <tr key={`${hi}-${ri}`} class="ln" data-new={b?.n ?? undefined} data-old={a?.o ?? undefined}>
-                  <td class={`num ${side(a)}`}>{a?.o ?? ""}</td>
-                  {a ? <SideCode line={a} /> : <td class="code empty" />}
-                  <td class={`num ${side(b)}`}>{b?.n ?? ""}</td>
-                  {b ? <SideCode line={b} /> : <td class="code empty" />}
-                </tr>
-              )),
+              ...rows.map(([a, b], ri) => {
+                const sel = (a && ctx.selected.has(lineKey(a))) || (b && ctx.selected.has(lineKey(b)));
+                const here = [...new Set([...(a ? at.get(lineKey(a)) ?? [] : []), ...(b && b !== a ? at.get(lineKey(b)) ?? [] : [])])];
+                return [
+                  <tr key={`${hi}-${ri}`} class={`ln ${sel ? "sel" : ""}`} data-new={b?.n ?? undefined} data-old={a?.o ?? undefined}>
+                    <Num line={a} class={side(a)}>{a?.o ?? ""}</Num>
+                    {a ? <SideCode line={a} /> : <td class="code empty" />}
+                    <Num line={b} class={side(b)}>{b?.n ?? ""}</Num>
+                    {b ? <SideCode line={b} /> : <td class="code empty" />}
+                  </tr>,
+                  <ThreadRows key={`t${hi}-${ri}`} threads={here} cols={4} />,
+                ];
+              }),
             ];
           })}
         </tbody>
@@ -189,8 +283,20 @@ function SideCode({ line }: { line: Line }) {
 
 /** Whole new file; removed lines fold into a "n removed" row you can open. */
 function FullView({ hunks }: { hunks: PreparedHunk[] }) {
+  const ctx = useContext(Interaction);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const lines = hunks.flatMap((h) => h.lines);
+  // Threads on removed lines sit under their (possibly folded) removed block.
+  const blockOf = new Map<string, string>();
+  for (let i = 0; i < lines.length; ) {
+    if (lines[i].t !== "-") {
+      i++;
+      continue;
+    }
+    const id = `r${lines[i].o}`;
+    while (i < lines.length && lines[i].t === "-") blockOf.set(lineKey(lines[i++]), id);
+  }
+  const { at, unplaced } = placeThreads(ctx.threads, lines, (l) => blockOf.get(lineKey(l)) ?? lineKey(l));
   const items: ({ kind: "line"; line: Line } | { kind: "removed"; id: string; lines: Line[] })[] = [];
   for (let i = 0; i < lines.length; ) {
     if (lines[i].t !== "-") {
@@ -212,15 +318,20 @@ function FullView({ hunks }: { hunks: PreparedHunk[] }) {
 
   return (
     <div class="diff-scroll full-wrap">
+      <div>
+      <Unplaced threads={unplaced} />
       <table class="diff full">
         <tbody>
           {items.map((it, idx) =>
             it.kind === "line" ? (
-              <tr key={idx} class={`ln t${it.line.t === "+" ? "a" : "c"}`} data-new={it.line.n ?? undefined}>
-                <td class="num">{it.line.n}</td>
-                <td class="sign">{it.line.t === "+" ? "+" : " "}</td>
-                <Code line={it.line} />
-              </tr>
+              [
+                <tr key={idx} class={`ln t${it.line.t === "+" ? "a" : "c"} ${ctx.selected.has(lineKey(it.line)) ? "sel" : ""}`} data-new={it.line.n ?? undefined}>
+                  <Num line={it.line}>{it.line.n}</Num>
+                  <td class="sign">{it.line.t === "+" ? "+" : " "}</td>
+                  <Code line={it.line} />
+                </tr>,
+                <ThreadRows key={`t${idx}`} threads={at.get(lineKey(it.line))} cols={3} />,
+              ]
             ) : open.has(it.id) ? (
               [
                 <tr key={it.id} class="ghost-toggle" onClick={() => toggle(it.id)}>
@@ -229,23 +340,28 @@ function FullView({ hunks }: { hunks: PreparedHunk[] }) {
                   <td class="code">hide {it.lines.length} removed</td>
                 </tr>,
                 ...it.lines.map((l, k) => (
-                  <tr key={`${it.id}-${k}`} class="ln td ghost" data-old={l.o ?? undefined}>
-                    <td class="num">{l.o}</td>
+                  <tr key={`${it.id}-${k}`} class={`ln td ghost ${ctx.selected.has(lineKey(l)) ? "sel" : ""}`} data-old={l.o ?? undefined}>
+                    <Num line={l}>{l.o}</Num>
                     <td class="sign">−</td>
                     <Code line={l} />
                   </tr>
                 )),
+                <ThreadRows key={`t${it.id}`} threads={at.get(it.id)} cols={3} />,
               ]
             ) : (
-              <tr key={it.id} class="ghost-toggle" onClick={() => toggle(it.id)}>
-                <td class="num" />
-                <td class="sign">▸</td>
-                <td class="code">{it.lines.length} removed {it.lines.length === 1 ? "line" : "lines"}</td>
-              </tr>
+              [
+                <tr key={it.id} class="ghost-toggle" onClick={() => toggle(it.id)}>
+                  <td class="num" />
+                  <td class="sign">▸</td>
+                  <td class="code">{it.lines.length} removed {it.lines.length === 1 ? "line" : "lines"}</td>
+                </tr>,
+                <ThreadRows key={`t${it.id}`} threads={at.get(it.id)} cols={3} />,
+              ]
             ),
           )}
         </tbody>
       </table>
+      </div>
       <div class="ruler-track" aria-hidden="true">
         <div class="ruler">
           {items.map((it, idx) =>

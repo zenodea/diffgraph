@@ -1,11 +1,12 @@
 import { render } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
+import type { Thread } from "../server/ask.ts";
 import type { Changes } from "../server/changes.ts";
 import type { Scope } from "../server/git.ts";
 import type { ReviewedFile } from "../server/review.ts";
 import { api, repoId, type Repo } from "./api.ts";
 import type { ViewMode } from "./DiffView.tsx";
-import { FilePane } from "./FilePane.tsx";
+import { FilePane, type AskRequest } from "./FilePane.tsx";
 import { readHashPath, useHashPath, useKeys, usePersisted } from "./hooks.ts";
 import { Check } from "./icons.tsx";
 import { useLive, useTick, type Live } from "./live.ts";
@@ -58,17 +59,24 @@ function App() {
         setScope("branch");
       } else setError(e.message);
     });
-  const live = useLive((paths) => {
-    if (repo) load();
-    if (!paths.length) return;
-    const next = new Map(recent);
-    for (const p of paths) next.set(p, Date.now());
-    setRecent(next);
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const upsertThread = (t: Thread) => setThreads((all) => (all.some((x) => x.id === t.id) ? all.map((x) => (x.id === t.id ? t : x)) : [...all, t]));
+  const live = useLive({
+    onChanges: (paths) => {
+      if (repo) load();
+      if (!paths.length) return;
+      const next = new Map(recent);
+      for (const p of paths) next.set(p, Date.now());
+      setRecent(next);
+    },
+    onThread: upsertThread,
+    onThreadDeleted: (id) => setThreads((all) => all.filter((t) => t.id !== id)),
   });
   useTick(15_000);
 
   useEffect(() => {
     api<Repo>(`/api/repos/${repoId}`).then(setRepo, (e) => setError(e.message));
+    api<{ threads: Thread[] }>(`/api/repos/${repoId}/threads`).then((r) => setThreads(r.threads), () => {});
   }, []);
   useEffect(() => void (repo && load()), [repo, scope]);
   useEffect(() => {
@@ -132,6 +140,25 @@ function App() {
       setToast((e as Error).message);
     }
     load();
+  };
+
+  const agentName = live.agent?.split(":")[0] ?? repo?.agent ?? null;
+  const threadCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of threads) m.set(t.path, (m.get(t.path) ?? 0) + 1);
+    return m;
+  }, [threads]);
+
+  const fail = (e: unknown) => {
+    setToast((e as Error).message);
+    throw e;
+  };
+  const ask = (req: AskRequest) => api<Thread>(`/api/repos/${repoId}/threads`, { body: { ...req, scope } }).then(upsertThread, fail);
+  const replyTo = (t: Thread, question: string, target: "inline" | "agent") =>
+    api<Thread>(`/api/repos/${repoId}/threads/${t.id}`, { body: { question, target, scope } }).then(upsertThread, fail);
+  const deleteThread = (t: Thread) => {
+    setThreads((all) => all.filter((x) => x.id !== t.id));
+    api(`/api/repos/${repoId}/threads/${t.id}`, { method: "DELETE" }).catch(() => {});
   };
 
   useKeys((e) => {
@@ -216,13 +243,14 @@ function App() {
           {files.length === 0 && !showAll ? (
             <div class="sidebar-empty">No changes in this scope.</div>
           ) : (
-            <Tree root={tree} selected={selected} collapsed={collapsed} onSelect={setSelected} onToggle={toggle} onReview={(fs, r) => review(fs, r)} hideReviewed={hideReviewed} recent={recent} />
+            <Tree root={tree} selected={selected} collapsed={collapsed} onSelect={setSelected} onToggle={toggle} onReview={(fs, r) => review(fs, r)} hideReviewed={hideReviewed} recent={recent} threadCounts={threadCounts} />
           )}
           <div class="keys-hint">
             <span><kbd>j</kbd> <kbd>k</kbd> move</span>
             <span><kbd>n</kbd> next to review</span>
             <span><kbd>space</kbd> reviewed</span>
             <span><kbd>h</kbd> hide reviewed</span>
+            <span><kbd>a</kbd> ask</span>
           </div>
         </aside>
         <main class="main">
@@ -235,7 +263,18 @@ function App() {
             </div>
           )}
           {current ? (
-            <FilePane file={current} scope={scope} mode={mode} setMode={setMode} onReview={(r) => review([current], r, true)} />
+            <FilePane
+              file={current}
+              scope={scope}
+              mode={mode}
+              setMode={setMode}
+              onReview={(r) => review([current], r, true)}
+              threads={threads.filter((t) => t.path === current.path)}
+              agent={agentName}
+              onAsk={ask}
+              onReply={replyTo}
+              onDeleteThread={deleteThread}
+            />
           ) : (
             <Notice title="Nothing changed" body={scopes.find((s) => s.id === scope)!.hint(changes)} />
           )}

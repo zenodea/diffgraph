@@ -114,6 +114,11 @@ function send(res: ServerResponse, event: string, data: unknown) {
 
 const hubs = new Map<string, Hub>();
 
+/** Sends an event to every page open on a repo. */
+export function broadcast(repoId: string, event: string, data: unknown) {
+  for (const c of hubs.get(repoId)?.clients ?? []) send(c.res, event, data);
+}
+
 /** Open event streams; the server stays up while there are any. */
 export const liveConnections = new Set<ServerResponse>();
 

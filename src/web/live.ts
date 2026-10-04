@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import type { Thread } from "../server/ask.ts";
 import { repoId, token } from "./api.ts";
 
 export interface Live {
@@ -10,13 +11,20 @@ export interface Live {
   dismissSuperseded: () => void;
 }
 
-/** Subscribes to the server's event stream; `onChanges` gets the paths that moved. */
-export function useLive(onChanges: (paths: string[]) => void): Live {
+export interface LiveHandlers {
+  /** Paths the watcher saw move (empty after a reconnect: refetch everything). */
+  onChanges: (paths: string[]) => void;
+  onThread: (thread: Thread) => void;
+  onThreadDeleted: (id: string) => void;
+}
+
+/** Subscribes to the server's event stream. */
+export function useLive(handlers: LiveHandlers): Live {
   const [connected, setConnected] = useState(false);
   const [agent, setAgent] = useState<string | null>(null);
   const [superseded, setSuperseded] = useState(false);
-  const cb = useRef(onChanges);
-  cb.current = onChanges;
+  const cb = useRef(handlers);
+  cb.current = handlers;
 
   useEffect(() => {
     const es = new EventSource(`/api/repos/${repoId}/events?t=${token}`);
@@ -25,9 +33,11 @@ export function useLive(onChanges: (paths: string[]) => void): Live {
       setConnected(true);
       setAgent(data(e).agent);
       // Anything could have changed while we were disconnected.
-      cb.current([]);
+      cb.current.onChanges([]);
     });
-    es.addEventListener("changes", (e) => cb.current(data(e).paths));
+    es.addEventListener("changes", (e) => cb.current.onChanges(data(e).paths));
+    es.addEventListener("thread", (e) => cb.current.onThread(data(e)));
+    es.addEventListener("thread-deleted", (e) => cb.current.onThreadDeleted(data(e).id));
     es.addEventListener("agent", (e) => setAgent(data(e).agent));
     es.addEventListener("superseded", () => setSuperseded(true));
     es.onerror = () => setConnected(false);
