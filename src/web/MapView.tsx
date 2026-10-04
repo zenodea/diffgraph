@@ -377,11 +377,11 @@ export function MapView(props: Props) {
               );
             })}
           </g>
-          <g class="links">
+          <g class="dep-links">
             {links.map((l) => {
               const hot = !!focus && (l.fromPath === focus || l.toPath === focus);
               return (
-                <path key={l.id} class={`link ${hot ? "hot" : ""}`} d={l.d} marker-end={`url(#${hot ? "arrow-hot" : "arrow"})`}>
+                <path key={l.id} class={`dep-link ${hot ? "hot" : ""}`} d={l.d} marker-end={`url(#${hot ? "arrow-hot" : "arrow"})`}>
                   <title>
                     {l.fromLabel} imports {l.toLabel}
                   </title>

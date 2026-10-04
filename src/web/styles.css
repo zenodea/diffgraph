@@ -660,8 +660,8 @@ kbd {
 
 /* Import links */
 /* Only the focused (hovered or selected) file's links show; all of them at once is noise. */
-.link { fill: none; stroke: var(--accent); stroke-width: 1.8; opacity: 0; pointer-events: none; transition: opacity 0.15s; }
-.graph .link.hot { opacity: 1; pointer-events: stroke; }
+.dep-link { fill: none; stroke: var(--accent); stroke-width: 1.8; opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+.graph .dep-link.hot { opacity: 1; pointer-events: stroke; }
 .arrow { fill: var(--link); }
 .arrow.hot { fill: var(--accent); }
 .gnode.ghost circle { fill: none; stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 2.5 2; }
