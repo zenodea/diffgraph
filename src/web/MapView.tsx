@@ -6,7 +6,8 @@ import type { Summary } from "../server/summaries.ts";
 import { changedShare } from "../shared.ts";
 import { entriesByDir, layoutGraph, type GraphNode, type Placed } from "./graph.ts";
 import { api, repoId } from "./api.ts";
-import { usePersisted } from "./hooks.ts";
+import { useKeys, usePersisted } from "./hooks.ts";
+import { usePanZoom } from "./panzoom.ts";
 import { plural } from "./util.ts";
 
 interface Props {
@@ -91,17 +92,36 @@ function SummaryPanel(props: {
   folders: string[];
   files: ReviewedFile[];
   summaries: Record<string, Summary | null>;
+  pending: Set<string>;
+  onSummarize: (folders: string[]) => void;
   onHover: (folder: string | null) => void;
   onPick: (folder: string) => void;
 }) {
   const count = (folder: string) => props.files.filter((f) => folder === "" || f.path.startsWith(folder + "/")).length;
+  const ask = (folder: string, label: string) => (
+    <button
+      class="link summarize"
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onSummarize([folder]);
+      }}
+    >
+      {label}
+    </button>
+  );
   const line = (folder: string) => {
+    if (props.pending.has(folder)) return <span class="summary-wait">Summarizing…</span>;
     const s = props.summaries[folder];
-    if (!s) return <span class="summary-wait">Summarizing…</span>;
+    if (!s) return ask(folder, "Summarize");
     return (
       <>
         {s.text}
-        {s.stale && <span class="summary-stale"> · updating</span>}
+        {s.stale && (
+          <span class="summary-stale">
+            {" "}
+            · changed since · {ask(folder, "update")}
+          </span>
+        )}
       </>
     );
   };
@@ -203,10 +223,9 @@ export function MapView(props: Props) {
   // null until you fold something yourself; then your choice sticks.
   const [savedCollapsed, setCollapsedList] = usePersisted<string[] | null>("mapCollapsed", null);
   const collapsedList = savedCollapsed ?? autoCollapsed(files);
-  const [zoom, setZoom] = usePersisted("mapZoom", 1);
   const collapsed = useMemo(() => new Set(collapsedList), [collapsedList]);
   const entries = useMemo(() => (allPaths ? entriesByDir(allPaths) : null), [allPaths]);
-  const [showLinks, setShowLinks] = usePersisted("mapLinks", true);
+  const [showLinks, setShowLinks] = usePersisted("mapLinks", false);
   const [deps, setDeps] = useState<Deps | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -232,7 +251,8 @@ export function MapView(props: Props) {
   const links = useMemo(() => (showLinks && deps ? placeLinks(layout.nodes, deps) : []), [layout, deps, showLinks]);
   const width = Math.max(layout.width, ...links.map((l) => l.right + 24));
   const focus = hovered ?? selected;
-  const scroller = useRef<HTMLDivElement>(null);
+  const pz = usePanZoom();
+  const nodeAt = (pred: (n: Placed) => boolean) => layout.nodes.find(pred);
 
   const maxWeight = Math.max(1, ...layout.nodes.filter((n) => n.node.kind === "file" || n.node.kind === "dir").map((n) => n.weight));
   // Highlight the branch leading to the selected file.
@@ -245,47 +265,70 @@ export function MapView(props: Props) {
   for (let p = pathStart ?? null; p; p = p.parent) onPath.add(p);
 
   // Folder summaries for the panel: one per folder on the map, plus "" for the whole change.
-  const [showSummary, setShowSummary] = usePersisted("mapSummary", true);
+  const [showSummary, setShowSummary] = usePersisted("mapSummary", false);
   const [summaries, setSummaries] = useState<Record<string, Summary | null>>({});
+  const [pending, setPending] = useState<Set<string>>(new Set());
   const folders = useMemo(
     () => ["", ...layout.nodes.filter((n) => n.node.kind === "dir" && n.node.files.length > 0).map((n) => (n.node as { path: string }).path)],
     [layout],
   );
   const foldersKey = folders.join("|");
-  useEffect(() => setSummaries({}), [props.scope]);
+  // Only ever written when you ask for one; this just loads what's already cached.
+  const fetchSummaries = (generate: string[] = []) =>
+    api<{ summaries: Record<string, Summary | null> }>(`/api/repos/${repoId}/summaries`, { body: { scope: props.scope, folders, generate } }).then(
+      (r) => setSummaries((cur) => ({ ...cur, ...r.summaries })),
+      () => {},
+    );
+  const summarize = (targets: string[]) => {
+    setPending((cur) => new Set([...cur, ...targets]));
+    fetchSummaries(targets);
+  };
+  useEffect(() => {
+    setSummaries({});
+    setPending(new Set());
+  }, [props.scope]);
   useEffect(() => {
     if (!showSummary || !files.length) return;
-    let live = true;
-    const t = setTimeout(() => {
-      api<{ summaries: Record<string, Summary | null> }>(`/api/repos/${repoId}/summaries`, { body: { scope: props.scope, folders } }).then(
-        (r) => live && setSummaries((cur) => ({ ...cur, ...r.summaries })),
-        () => {},
-      );
-    }, 1200);
-    return () => {
-      live = false;
-      clearTimeout(t);
-    };
+    const t = setTimeout(() => fetchSummaries(), 300);
+    return () => clearTimeout(t);
   }, [filesKey, foldersKey, showSummary, props.scope]);
   useEffect(() => {
     const on = (e: Event) => {
       const d = (e as CustomEvent).detail;
-      if (d.scope === props.scope) setSummaries((cur) => ({ ...cur, [d.folder]: d.summary }));
+      if (d.scope !== props.scope) return;
+      if (d.summary) setSummaries((cur) => ({ ...cur, [d.folder]: d.summary }));
+      setPending((cur) => {
+        const next = new Set(cur);
+        next.delete(d.folder);
+        return next;
+      });
     };
     addEventListener("graphdiff:summary", on);
     return () => removeEventListener("graphdiff:summary", on);
   }, [props.scope]);
 
+  // Open on the root, vertically centred: the shape of the change, not the middle of a list.
+  const placed = useRef(false);
   useEffect(() => {
-    scroller.current?.querySelector(".gnode.selected")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const root = layout.nodes[0];
+    if (placed.current || !pz.node || !root) return;
+    placed.current = true;
+    pz.place(0, root.y, 0, 0.5, false);
+  }, [pz.node, layout]);
+
+  // Keyboard selection pans the file into view.
+  useEffect(() => {
+    const n = nodeAt((n) => n.node.kind === "file" && n.node.path === selected);
+    if (n && placed.current) pz.reveal(n.x - 8, n.y - 14, n.width + 16);
   }, [selected]);
 
-  // Start where the shape of the change is visible: the root, not the middle of a long list.
-  useEffect(() => {
-    const el = scroller.current;
-    const root = layout.nodes[0];
-    if (el && root && !scroller.current?.querySelector(".gnode.selected")) el.scrollTop = Math.max(0, root.y * zoom - el.clientHeight / 2);
-  }, []);
+  useKeys((e) => {
+    if (e.key === "=" || e.key === "+") pz.zoomBy(1.2);
+    else if (e.key === "-") pz.zoomBy(1 / 1.2);
+    else if (e.key === "0") pz.fit(width, layout.height);
+    else return;
+    e.preventDefault();
+  });
 
   const toggleDir = (path: string) => setCollapsedList(collapsed.has(path) ? collapsedList.filter((p) => p !== path) : [...collapsedList, path]);
   // Folders with no subfolders: collapsing them leaves just the shape of the change.
@@ -294,11 +337,6 @@ export function MapView(props: Props) {
     return [...dirs].filter((d) => ![...dirs].some((o) => o.startsWith(d + "/")));
   };
   const foldersOnly = collapsedList.length > 0;
-  const fit = () => {
-    const el = scroller.current;
-    if (!el) return;
-    setZoom(Math.max(0.35, Math.min(1.5, (el.clientWidth - 8) / layout.width, (el.clientHeight - 8) / layout.height)));
-  };
 
   if (!files.length) {
     return (
@@ -332,18 +370,17 @@ export function MapView(props: Props) {
           {foldersOnly ? "Show files" : "Folders only"}
         </button>
         <span class="zoom">
-          <button class="btn small" onClick={() => setZoom(Math.max(0.35, zoom - 0.15))} aria-label="Zoom out">−</button>
-          <button class="btn small" onClick={() => setZoom(1)} title="Actual size">{Math.round(zoom * 100)}%</button>
-          <button class="btn small" onClick={() => setZoom(Math.min(2, zoom + 0.15))} aria-label="Zoom in">+</button>
-          <button class="btn small" onClick={fit}>Fit</button>
+          <button class="btn small" onClick={() => pz.zoomBy(1 / 1.2)} aria-label="Zoom out" title="Zoom out (−)">−</button>
+          <button class="btn small" onClick={pz.reset} title="Actual size">{Math.round(pz.view.k * 100)}%</button>
+          <button class="btn small" onClick={() => pz.zoomBy(1.2)} aria-label="Zoom in" title="Zoom in (+)">+</button>
+          <button class="btn small" onClick={() => pz.fit(width, layout.height)} title="Fit everything (0)">Fit</button>
         </span>
       </div>
-      <div class="map-scroll" ref={scroller}>
+      <div class={`map-scroll ${pz.dragging ? "dragging" : ""}`} ref={pz.ref}>
         <svg
           class={`graph ${hovered ? "hovering" : ""}`}
-          width={width * zoom}
-          height={layout.height * zoom}
-          viewBox={`0 0 ${width} ${layout.height}`}
+          width="100%"
+          height="100%"
           role="tree"
           aria-label="Changed files as a map"
           onMouseOver={(e) => setHovered((e.target as Element).closest?.("[data-path]")?.getAttribute("data-path") ?? null)}
@@ -357,6 +394,10 @@ export function MapView(props: Props) {
               <path d="M0,0 L8,4 L0,8 z" class="arrow hot" />
             </marker>
           </defs>
+          <g
+            class={`viewport ${pz.animating ? "animating" : ""}`}
+            style={{ transform: `translate(${pz.view.x}px, ${pz.view.y}px) scale(${pz.view.k})` }}
+          >
           <g class="edges">
             {layout.nodes.map((n) => {
               if (!n.parent) return null;
@@ -392,6 +433,7 @@ export function MapView(props: Props) {
           {layout.nodes.map((n) => (
             <Node key={n.node.id} placed={n} {...props} onPath={onPath.has(n)} onToggle={toggleDir} />
           ))}
+          </g>
         </svg>
       </div>
       </div>
@@ -401,26 +443,16 @@ export function MapView(props: Props) {
           files={files}
           summaries={summaries}
           onHover={setHoveredDir}
+          pending={pending}
+          onSummarize={summarize}
           onPick={(folder) => {
-            const el = scroller.current?.querySelector(`[data-dir="${CSS.escape(folder)}"]`);
-            el?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+            const n = nodeAt((n) => (folder === "" ? n.node.kind === "root" : n.node.kind === "dir" && n.node.path === folder));
+            if (n) pz.place(n.x, n.y, 0.3, 0.5);
           }}
         />
       )}
       </div>
-      <div class="map-legend" aria-hidden="true">
-        <span><i class="ld s-A" />added</span>
-        <span><i class="ld s-M" />modified</span>
-        <span><i class="ld s-D" />deleted</span>
-        <span><i class="ld s-R" />renamed</span>
-        {props.reviewMode && <span><i class="ld done" />reviewed</span>}
-        {props.reviewMode && <span><i class="ld again" />edited again</span>}
-        <span><i class="ld pie" />part of the file changed</span>
-        {showLinks && <span><i class="ld link-sample" />imports: hover a file to see what it uses and what uses it</span>}
-        {showLinks && <span><i class="ld ghost" />unchanged, but uses a changed file</span>}
-        <span class="muted">thicker line = more changed{props.reviewMode ? " · click a dot to mark reviewed" : ""} · click a name to open it</span>
-        <span class="muted"><kbd>j</kbd> <kbd>k</kbd> select · <kbd>enter</kbd> open{props.reviewMode ? <> · <kbd>space</kbd> reviewed</> : null} · <kbd>g</kbd> files · <kbd>r</kbd> review mode</span>
-      </div>
+
     </div>
   );
 }

@@ -82,8 +82,8 @@ route("GET", "/api/repos/:id/deps", async ({ params, url }) => {
 
 route("POST", "/api/repos/:id/summaries", async ({ params, body }) => {
   const repo = repoOr404(params.id);
-  const { scope, folders } = await body();
+  const { scope, folders, generate } = await body();
   if (!Array.isArray(folders)) throw new HttpError(400, "folders required");
   const changes = await getChanges(repo, parseScope(scope ?? null));
-  return { summaries: getSummaries(repo, changes, folders.map(String)) };
+  return { summaries: getSummaries(repo, changes, folders.map(String), Array.isArray(generate) ? generate.map(String) : []) };
 });

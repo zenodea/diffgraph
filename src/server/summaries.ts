@@ -1,7 +1,8 @@
 // One-line, plain-English summaries of what changed in each folder (and in the
 // whole change), written by a small model and cached until the folder changes.
-// While the agent keeps editing, a stale summary stays up and refreshes at most
-// every few minutes, so this costs a handful of calls rather than one per save.
+// Nothing is written until you ask for it: a summary costs a model call, so the
+// page only requests the folders you pick, and an outdated one stays up (marked
+// as such) until you ask again.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -28,7 +29,6 @@ interface Stored {
 
 const dir = join(stateDir, "summaries");
 mkdirSync(dir, { recursive: true });
-const REFRESH_MS = 3 * 60_000;
 const MAX_FOLDERS = 24;
 const MAX_DIFF_CHARS = 18_000;
 const CONCURRENCY = 2;
@@ -73,8 +73,8 @@ function pump() {
   }
 }
 
-/** Cached summaries for `folders` ("" = the whole change); missing or stale ones get (re)written in the background. */
-export function getSummaries(repo: Repo, changes: Changes, folders: string[]): Record<string, Summary | null> {
+/** Cached summaries for `folders` ("" = the whole change); those in `generate` get (re)written in the background. */
+export function getSummaries(repo: Repo, changes: Changes, folders: string[], generate: string[] = []): Record<string, Summary | null> {
   const s = store(repo);
   const out: Record<string, Summary | null> = {};
   if (!loadConfig().summary.enabled) return out;
@@ -85,7 +85,7 @@ export function getSummaries(repo: Repo, changes: Changes, folders: string[]): R
     const cached = s[id];
     const fresh = cached?.key === key;
     out[folder] = cached ? { text: cached.text, at: cached.at, stale: !fresh } : null;
-    const due = !cached || (!fresh && Date.now() - cached.at > REFRESH_MS);
+    const due = generate.includes(folder) && !fresh;
     const jobId = `${repo.id}:${id}`;
     if (due && !queued.has(jobId)) {
       queued.add(jobId);
@@ -95,10 +95,11 @@ export function getSummaries(repo: Repo, changes: Changes, folders: string[]): R
           if (text) {
             s[id] = { key, text, at: Date.now() };
             save(repo);
-            broadcast(repo.id, "summary", { scope: changes.scope, folder, summary: { text, at: s[id].at, stale: false } });
           }
+          broadcast(repo.id, "summary", { scope: changes.scope, folder, summary: text ? { text, at: s[id].at, stale: false } : null });
         } catch (e) {
           console.error(`summary for ${folder || "(root)"} failed:`, e);
+          broadcast(repo.id, "summary", { scope: changes.scope, folder, summary: null });
         } finally {
           queued.delete(jobId);
         }
