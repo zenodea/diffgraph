@@ -19,7 +19,7 @@ async function tryGit(root: string, args: string[]): Promise<string | null> {
   return res.code === 0 ? res.stdout.trim() : null;
 }
 
-export type Scope = "branch" | "uncommitted" | "session";
+export type Scope = "branch" | "uncommitted" | "session" | "prompt";
 
 export type Status = "A" | "M" | "D" | "R" | "C" | "T";
 

@@ -1,37 +1,56 @@
 import { commitBefore, git } from "../git/git.ts";
 import { getAgent } from "../core/herdr.ts";
 import type { Repo } from "../core/repos.ts";
-import { findSessions, paneSession, readSession, toRepoPath, type AgentKind, type Session } from "./transcripts.ts";
+import { findSessions, paneSession, readSession, toRepoPath, type AgentKind, type Session, type SessionRef, type Turn } from "./transcripts.ts";
 
 export interface SessionInfo {
   agent: AgentKind;
   startedAt: string | null;
   prompts: number;
   file: string;
+  /** Your most recent prompt that led to edits (enables the "Last prompt" scope). */
+  lastPrompt: { text: string; at: string; files: number } | null;
 }
 
 const PANE_CACHE_MS = 20_000;
-const paneCache = new Map<string, { at: number; session: Session | null }>();
+const paneCache = new Map<string, { at: number; ref: SessionRef | null }>();
 
-/** The transcript of the agent in the pane graphdiff was opened from, if we can find it. */
+/**
+ * The transcript of the agent in the pane graphdiff was opened from, if we can find
+ * it. Which file it is gets cached briefly; the file itself is re-read every time
+ * (incrementally), so the latest prompt is never stale.
+ */
 export async function currentSession(repo: Repo): Promise<Session | null> {
-  const cached = paneCache.get(repo.id);
-  if (cached && Date.now() - cached.at < PANE_CACHE_MS) return cached.session;
-  const live = repo.paneId ? await getAgent(repo.paneId).catch(() => null) : null;
-  const ref = await paneSession(repo.root, live?.agent ?? repo.agent, live?.sessionPath ?? null);
-  const session = ref ? await readSession(ref.agent, ref.file) : null;
-  paneCache.set(repo.id, { at: Date.now(), session });
-  return session;
+  let cached = paneCache.get(repo.id);
+  if (!cached || Date.now() - cached.at >= PANE_CACHE_MS) {
+    const live = repo.paneId ? await getAgent(repo.paneId).catch(() => null) : null;
+    cached = { at: Date.now(), ref: await paneSession(repo.root, live?.agent ?? repo.agent, live?.sessionPath ?? null) };
+    paneCache.set(repo.id, cached);
+  }
+  return cached.ref ? readSession(cached.ref.agent, cached.ref.file) : null;
 }
 
-export function sessionInfo(s: Session): SessionInfo {
-  return { agent: s.agent, startedAt: s.startedAt, prompts: s.turns.length, file: s.file };
+/** The newest turn that edited something. */
+export function lastEditingTurn(s: Session): Turn | null {
+  for (let i = s.turns.length - 1; i >= 0; i--) if (s.turns[i].edits.length) return s.turns[i];
+  return null;
 }
 
-/** Repo paths a session edited. */
-export function editedPaths(repo: Repo, s: Session): Set<string> {
+export function sessionInfo(repo: Repo, s: Session): SessionInfo {
+  const last = lastEditingTurn(s);
+  return {
+    agent: s.agent,
+    startedAt: s.startedAt,
+    prompts: s.turns.length,
+    file: s.file,
+    lastPrompt: last && { text: last.prompt.slice(0, 300), at: last.at, files: editedPaths(repo, s, [last]).size },
+  };
+}
+
+/** Repo paths a session (or some of its turns) edited. */
+export function editedPaths(repo: Repo, s: Session, turns: Turn[] = s.turns): Set<string> {
   const out = new Set<string>();
-  for (const t of s.turns) for (const e of t.edits) {
+  for (const t of turns) for (const e of t.edits) {
     const p = toRepoPath(repo.root, s.cwd, e.path);
     if (p) out.add(p);
   }

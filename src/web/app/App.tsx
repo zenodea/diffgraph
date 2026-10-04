@@ -35,6 +35,15 @@ const scopes: { id: Scope; label: string; hint: (c: Reviewed) => string; availab
         : "Needs the transcript of the agent in this pane (Claude Code, Codex or pi); none was found",
     available: (c) => !!c.session,
   },
+  {
+    id: "prompt",
+    label: "Last prompt",
+    hint: (c) =>
+      c.session?.lastPrompt
+        ? `What the ${c.session.agent} agent changed for your latest prompt: "${c.session.lastPrompt.text.slice(0, 140)}${c.session.lastPrompt.text.length > 140 ? "…" : ""}"`
+        : "Needs the transcript of the agent in this pane, and a prompt that changed something",
+    available: (c) => !!c.session?.lastPrompt,
+  },
 ];
 
 const modeKeys: Record<string, ViewMode> = { "1": "unified", "2": "split", "3": "full" };
@@ -61,7 +70,7 @@ export function App() {
 
   const load = () =>
     api<Reviewed>(`/api/repos/${repoId}/changes?scope=${scope}`).then(setChanges, (e) => {
-      if (scope === "session") {
+      if (scope === "session" || scope === "prompt") {
         setToast(e.message);
         setScope("branch");
       } else setError(e.message);
