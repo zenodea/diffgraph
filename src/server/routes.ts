@@ -1,16 +1,16 @@
 // Every HTTP endpoint the page uses. Logic lives in the modules imported here.
-import { deleteThread, getThreads, reply, startThread } from "./ask.ts";
-import { getChanges, parseScope } from "./changes.ts";
-import { dependencies } from "./deps.ts";
-import { fileDiff, sendImage } from "./fileDiff.ts";
-import { loadConfig } from "./env.ts";
-import { allFiles, repoState } from "./git.ts";
-import { HttpError, route } from "./http.ts";
-import { subscribe } from "./live.ts";
-import { repoOr404 } from "./repos.ts";
-import { setReviewed, sinceReview, withReviews } from "./review.ts";
-import { getSummaries } from "./summaries.ts";
-import { whyFor } from "./why.ts";
+import { deleteThread, getThreads, reply, startThread } from "./agents/ask.ts";
+import { getChanges, parseScope } from "./git/changes.ts";
+import { dependencies } from "./deps/deps.ts";
+import { fileDiff, sendImage } from "./git/fileDiff.ts";
+import { loadConfig } from "./core/env.ts";
+import { allFiles, repoState } from "./git/git.ts";
+import { HttpError, route } from "./core/http.ts";
+import { subscribe } from "./core/live.ts";
+import { repoOr404 } from "./core/repos.ts";
+import { setReviewed, sinceReview, withReviews } from "./review/review.ts";
+import { getSummaries } from "./agents/summaries.ts";
+import { whyFor } from "./agents/why.ts";
 
 route("GET", "/api/repos/:id/changes", async ({ params, url }) => {
   const repo = repoOr404(params.id);

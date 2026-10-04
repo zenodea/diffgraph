@@ -2,10 +2,10 @@ import { randomBytes } from "node:crypto";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
-import { loadConfig, stateDir } from "./env.ts";
-import { HttpError, match, readBody, route, sendJson } from "./http.ts";
-import { liveConnections } from "./live.ts";
-import { registerRepo, repoOr404 } from "./repos.ts";
+import { loadConfig, stateDir } from "./core/env.ts";
+import { HttpError, match, readBody, route, sendJson } from "./core/http.ts";
+import { liveConnections } from "./core/live.ts";
+import { registerRepo, repoOr404 } from "./core/repos.ts";
 import "./routes.ts";
 
 const root = join(import.meta.dirname, "../..");

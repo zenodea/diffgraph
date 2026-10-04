@@ -1,0 +1,61 @@
+/* Top bar: live status, progress, review switch, help. */
+
+.progress { display: flex; align-items: center; gap: 10px; }
+.progress .bar { width: 110px; height: 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
+.progress .bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.3s ease; }
+.progress.all .bar span { background: var(--done); }
+.progress-label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.progress-label b { font-size: 15px; }
+.progress.all .progress-label { color: var(--done); font-weight: 650; }
+
+/* Live */
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--done); }
+.live.off .dot { background: var(--faint); }
+.live.working { color: var(--accent); }
+.live.working .dot { background: var(--accent); animation: breathe 1.4s ease-in-out infinite; }
+.live.blocked { color: var(--warn); font-weight: 600; }
+.live.blocked .dot { background: var(--warn); }
+
+.banner.info { background: var(--accent-soft); color: var(--text); }
+
+/* Review mode switch */
+.review-toggle { gap: 8px; }
+.toggle-track { position: relative; width: 26px; height: 15px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border-strong); transition: background 0.15s; }
+.toggle-track span { position: absolute; top: 1.5px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transition: transform 0.15s, background 0.15s; }
+.review-toggle.on { border-color: var(--accent); color: var(--accent); }
+.review-toggle.on .toggle-track { background: var(--accent-fill); border-color: var(--accent-fill); }
+.review-toggle.on .toggle-track span { transform: translateX(10px); background: #fff; }
+.news-clear { color: var(--accent); }
+.news-pip-sm { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+/* Help */
+.help { position: relative; }
+.help-btn { width: 28px; height: 28px; padding: 0; justify-content: center; border-radius: 50%; font-weight: 700; }
+.help-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.25);
+  font-size: 13px;
+}
+.help-pop h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.help-pop h3:not(:first-child) { margin-top: 14px; }
+.help-pop ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.help-pop li { display: flex; align-items: center; gap: 8px; }
+.help-pop .keys { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; align-items: center; }
+.help-pop .keys span:nth-child(odd) { white-space: nowrap; }
+.ld { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; }
+.ld.s-A { background: var(--add); }
+.ld.s-M { background: var(--mod); }
+.ld.s-D { background: var(--del); }
+.ld.s-R { background: var(--ren); }
+.ld.done { background: var(--faint); }
+.ld.again { border: 2px solid var(--warn); }
+.ld.thick { width: 18px; height: 4px; border-radius: 2px; background: var(--edge); }

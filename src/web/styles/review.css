@@ -1,0 +1,35 @@
+/* Review mode: ticks and reviewed states. */
+
+/* Review */
+.circle {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1.5px solid var(--faint);
+  border-radius: 50%;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+}
+.circle:hover { border-color: var(--done); background: color-mix(in srgb, var(--done) 15%, transparent); }
+.circle.done { background: var(--done); border-color: var(--done); }
+.circle.done svg { width: 11px; height: 11px; }
+.circle.some { border-color: var(--done); background: linear-gradient(90deg, color-mix(in srgb, var(--done) 45%, transparent) 50%, transparent 50%); }
+.circle.again { border-color: var(--warn); border-width: 2px; }
+.circle-spacer { width: 16px; flex: none; }
+
+.row.r-reviewed .name, .row.r-reviewed .stat, .row.r-reviewed .badge { opacity: 0.45; }
+.row.dir.r-reviewed .dir-count { color: var(--done); }
+.again {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warn);
+  background: var(--warn-bg);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.btn.reviewed { color: var(--done); border-color: color-mix(in srgb, var(--done) 40%, transparent); background: color-mix(in srgb, var(--done) 10%, var(--panel)); }

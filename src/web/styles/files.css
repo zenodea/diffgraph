@@ -1,0 +1,135 @@
+/* File list, file header and the "why" panel. */
+
+.body { flex: 1; display: grid; grid-template-columns: minmax(260px, 340px) 1fr; min-height: 0; }
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.sidebar-empty { padding: 24px 16px; color: var(--muted); }
+
+.tree { overflow: auto; flex: 1; padding: 4px 0 24px; }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding-right: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  border-left: 3px solid transparent;
+}
+.row:hover { background: var(--panel-2); }
+.row.selected { background: var(--accent-soft); border-left-color: var(--accent); }
+.row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.row.dir .name { color: var(--muted); font-weight: 550; }
+.row.dir.changed .name { color: var(--text); }
+.row.unchanged { opacity: 0.5; cursor: default; }
+.row.dir.unchanged { cursor: pointer; }
+.row.deleted .name { text-decoration: line-through; color: var(--muted); }
+.renamed-from { color: var(--faint); font-size: 12px; }
+.dir-count { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.chevron { display: inline-grid; place-items: center; width: 16px; color: var(--faint); transition: transform 0.12s; }
+.chevron.open { transform: rotate(90deg); }
+
+.badge {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font: 700 10px/1 var(--mono);
+  color: #fff;
+}
+.badge-spacer { width: 16px; flex: none; }
+.s-A { background: var(--add); }
+.s-M, .s-T { background: var(--mod); }
+.s-D { background: var(--del); }
+.s-R, .s-C { background: var(--ren); }
+
+.main { min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.file-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.file-path { font: 600 13.5px var(--mono); overflow-wrap: anywhere; }
+.file-path .muted { font-weight: 400; }
+
+.file-head .from { font-size: 12.5px; }
+
+.sidebar-head { gap: 14px; }
+
+.fresh { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.row.flash { animation: flash 2.4s ease-out; }
+@keyframes flash { 0%, 30% { background: color-mix(in srgb, var(--accent) 28%, transparent); } }
+
+/* Why */
+.why { border-bottom: 1px solid var(--border); background: var(--panel); }
+.why-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 16px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-align: left;
+}
+.why-head .muted { font-weight: 400; }
+.why-body { display: grid; gap: 8px; padding: 0 16px 12px 38px; }
+.why-item {
+  max-width: 900px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+}
+.why-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+.agent-tag, .current-tag { font-weight: 650; padding: 0 6px; border-radius: 999px; background: var(--panel-2); color: var(--text); }
+.current-tag { background: var(--accent-soft); color: var(--accent); }
+.why-prompt, .why-reason {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.why-item.expanded .why-prompt, .why-item.expanded .why-reason { display: block; }
+.why-reason { color: var(--muted); }
+.who { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--faint); margin-right: 8px; }
+.why-more { justify-self: start; font-size: 12.5px; }
+
+.q-count { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* News since you last looked */
+.news-tag { font-size: 11px; font-weight: 600; color: #fff; background: var(--accent-fill); padding: 1px 7px; border-radius: 999px; }

@@ -5,9 +5,9 @@
 import { spawn } from "node:child_process";
 import { openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { stateDir } from "./server/env.ts";
-import { contextFromEnv, notify } from "./server/herdr.ts";
-import { run } from "./server/proc.ts";
+import { stateDir } from "./server/core/env.ts";
+import { contextFromEnv, notify } from "./server/core/herdr.ts";
+import { run } from "./server/core/proc.ts";
 import { serverFile, type ServerInfo } from "./server/server.ts";
 
 const command = process.argv[2] ?? "open";
