@@ -1,7 +1,7 @@
 /* Top bar: live status, progress, review switch, help. */
 
 .progress { display: flex; align-items: center; gap: 10px; }
-.progress .bar { width: 110px; height: 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
+.progress .bar { width: 80px; height: 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
 .progress .bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.3s ease; }
 .progress.all .bar span { background: var(--done); }
 .progress-label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }

@@ -28,7 +28,7 @@ const scopes: { id: Scope; label: string; hint: (c: Reviewed) => string; availab
   { id: "uncommitted", label: "Uncommitted", hint: () => "Only what isn't committed yet (staged, unstaged, new files)" },
   {
     id: "session",
-    label: "This session",
+    label: "Session",
     hint: (c) =>
       c.session
         ? `Files the ${c.session.agent} agent in this pane edited since its session started${c.session.startedAt ? ` ${ago(Date.parse(c.session.startedAt))}` : ""} (${plural(c.session.prompts, "prompt")})`

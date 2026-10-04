@@ -36,7 +36,7 @@ export function Progress({ done, total, onNext }: { done: number; total: number;
             <span class="muted">of {total}</span>
           </span>
           <button class="btn small" onClick={onNext} title="Next file to review (n)">
-            Next <kbd>n</kbd>
+            Next
           </button>
         </>
       )}
