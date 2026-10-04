@@ -2,8 +2,10 @@ import { render } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Changes } from "../server/changes.ts";
 import type { ChangedFile, Scope } from "../server/git.ts";
+import type { FileDiff } from "../server/fileDiff.ts";
 import { api, repoId, type Repo } from "./api.ts";
-import { useHashPath, useKeys, usePersisted } from "./hooks.ts";
+import { DiffView, type ViewMode } from "./DiffView.tsx";
+import { readHashPath, useHashPath, useKeys, usePersisted } from "./hooks.ts";
 import { DiffStat, StatusBadge, Tree } from "./Tree.tsx";
 import { buildTree, visibleOrder } from "./tree.ts";
 import "./styles.css";
@@ -26,6 +28,7 @@ function App() {
   const [allPaths, setAllPaths] = useState<string[] | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useHashPath();
+  const [mode, setMode] = usePersisted<ViewMode>("mode", "unified");
 
   useEffect(() => {
     api<Repo>(`/api/repos/${repoId}`).then(setRepo, (e) => setError(e.message));
@@ -66,16 +69,15 @@ function App() {
     if (changes && !current && files.length) setSelected(order[0]?.path ?? null);
   }, [changes]);
 
-  useKeys(
-    (e) => {
-      const i = order.findIndex((f) => f.path === selected);
-      if (e.key === "j" || e.key === "ArrowDown") order[i + 1] && setSelected(order[i + 1].path);
-      else if (e.key === "k" || e.key === "ArrowUp") order[i - 1] && setSelected(order[i - 1].path);
+  useKeys((e) => {
+      // The hash updates synchronously, so fast repeats don't act on a stale selection.
+      const i = order.findIndex((f) => f.path === readHashPath());
+      if (e.key === "j") order[i + 1] && setSelected(order[i + 1].path);
+      else if (e.key === "k") order[i - 1] && setSelected(order[i - 1].path);
+      else if (e.key in modeKeys) setMode(modeKeys[e.key]);
       else return;
       e.preventDefault();
-    },
-    [order, selected],
-  );
+  });
 
   useEffect(() => {
     document.querySelector(".row.selected")?.scrollIntoView({ block: "nearest" });
@@ -133,25 +135,60 @@ function App() {
           )}
         </aside>
         <main class="main">
-          {current ? <FileHeader file={current} /> : <Notice title={files.length ? "Pick a file" : "Nothing changed"} body={files.length ? "j / k to move between files" : scopes.find((s) => s.id === scope)!.hint(changes)} />}
+          {current ? <FilePane file={current} scope={scope} mode={mode} setMode={setMode} /> : <Notice title={files.length ? "Pick a file" : "Nothing changed"} body={files.length ? "j / k to move between files" : scopes.find((s) => s.id === scope)!.hint(changes)} />}
         </main>
       </div>
     </div>
   );
 }
 
-function FileHeader({ file }: { file: ChangedFile }) {
+const modeKeys: Record<string, ViewMode> = { "1": "unified", "2": "split", "3": "full" };
+const modes: { id: ViewMode; label: string }[] = [
+  { id: "unified", label: "Unified" },
+  { id: "split", label: "Split" },
+  { id: "full", label: "Full file" },
+];
+
+function FilePane({ file, scope, mode, setMode }: { file: ChangedFile; scope: Scope; mode: ViewMode; setMode: (m: ViewMode) => void }) {
+  const [diff, setDiff] = useState<FileDiff | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const full = mode === "full";
+  // Refetch when the file itself changes (mtime/stat), not just when another is picked.
+  const version = `${file.path}|${file.mtime}|${file.added}|${file.deleted}`;
+
+  useEffect(() => {
+    let live = true;
+    setError(null);
+    api<FileDiff>(`/api/repos/${repoId}/diff?scope=${scope}&path=${encodeURIComponent(file.path)}${full ? "&full=1" : ""}`).then(
+      (d) => live && setDiff(d),
+      (e) => live && setError(e.message),
+    );
+    return () => void (live = false);
+  }, [version, scope, full]);
+
   const dir = file.path.includes("/") ? file.path.slice(0, file.path.lastIndexOf("/") + 1) : "";
+  const stale = diff?.file.path !== file.path;
   return (
-    <div class="file-head">
-      <StatusBadge file={file} />
-      <span class="file-path">
-        <span class="muted">{dir}</span>
-        {file.path.slice(dir.length)}
-      </span>
-      {file.oldPath && <span class="muted">from {file.oldPath}</span>}
-      <DiffStat file={file} />
-    </div>
+    <>
+      <div class="file-head">
+        <StatusBadge file={file} />
+        <span class="file-path">
+          <span class="muted">{dir}</span>
+          {file.path.slice(dir.length)}
+        </span>
+        {file.oldPath && <span class="muted from">from {file.oldPath}</span>}
+        <DiffStat file={file} />
+        <div class="spacer" />
+        <div class="segmented small" role="tablist" aria-label="Diff view">
+          {modes.map((m, i) => (
+            <button key={m.id} role="tab" aria-selected={mode === m.id} class={mode === m.id ? "on" : ""} title={`${m.label} (${i + 1})`} onClick={() => setMode(m.id)}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {error ? <div class="diff-note">{error}</div> : !diff || stale ? <div class="diff-note muted">Loading…</div> : <DiffView diff={diff} mode={mode} onFullFile={() => setMode("full")} />}
+    </>
   );
 }
 

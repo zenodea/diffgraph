@@ -6,6 +6,7 @@ import { loadConfig, stateDir } from "./env.ts";
 import { HttpError, match, readBody, route, sendJson } from "./http.ts";
 import { registerRepo, repoOr404 } from "./repos.ts";
 import "./changes.ts";
+import "./fileDiff.ts";
 
 const root = join(import.meta.dirname, "../..");
 const webDir = join(root, "dist/web");

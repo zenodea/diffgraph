@@ -1,8 +1,9 @@
 import { open, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { EMPTY_TREE } from "../shared.ts";
 import { run } from "./proc.ts";
 
-export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+export { EMPTY_TREE };
 
 export async function git(root: string, args: string[], okCodes = [0]): Promise<string> {
   const res = await run("git", ["-c", "core.quotepath=off", ...args], { cwd: root });
