@@ -39,6 +39,8 @@ export function useLive(handlers: LiveHandlers): Live {
     es.addEventListener("thread", (e) => cb.current.onThread(data(e)));
     es.addEventListener("thread-deleted", (e) => cb.current.onThreadDeleted(data(e).id));
     es.addEventListener("agent", (e) => setAgent(data(e).agent));
+    // The map listens for these itself.
+    es.addEventListener("summary", (e) => dispatchEvent(new CustomEvent("graphdiff:summary", { detail: data(e) })));
     es.addEventListener("superseded", () => setSuperseded(true));
     es.onerror = () => setConnected(false);
     return () => es.close();

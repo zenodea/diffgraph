@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Deps } from "../server/deps.ts";
 import type { Scope } from "../server/git.ts";
 import type { ReviewedFile } from "../server/review.ts";
+import type { Summary } from "../server/summaries.ts";
 import { changedShare } from "../shared.ts";
 import { entriesByDir, layoutGraph, type GraphNode, type Placed } from "./graph.ts";
 import { api, repoId } from "./api.ts";
@@ -84,6 +85,53 @@ function measure(node: GraphNode, threads: Map<string, number>, news: Map<string
     case "ghost":
       return 22 + textWidth(node.name, `italic ${FONT}`);
   }
+}
+
+function SummaryPanel(props: {
+  folders: string[];
+  files: ReviewedFile[];
+  summaries: Record<string, Summary | null>;
+  onHover: (folder: string | null) => void;
+  onPick: (folder: string) => void;
+}) {
+  const count = (folder: string) => props.files.filter((f) => folder === "" || f.path.startsWith(folder + "/")).length;
+  const line = (folder: string) => {
+    const s = props.summaries[folder];
+    if (!s) return <span class="summary-wait">Summarizing…</span>;
+    return (
+      <>
+        {s.text}
+        {s.stale && <span class="summary-stale"> · updating</span>}
+      </>
+    );
+  };
+  const [root, ...rest] = props.folders;
+  return (
+    <aside class="summary-panel" aria-label="What changed" onMouseLeave={() => props.onHover(null)}>
+      <div class="summary-item root" onMouseEnter={() => props.onHover(root)} onClick={() => props.onPick(root)}>
+        <div class="summary-head">
+          <span>The whole change</span>
+          <span class="muted">{plural(count(root), "file")}</span>
+        </div>
+        <p>{line(root)}</p>
+      </div>
+      {rest.map((folder) => {
+        const parts = folder.split("/");
+        return (
+          <div key={folder} class="summary-item" onMouseEnter={() => props.onHover(folder)} onClick={() => props.onPick(folder)}>
+            <div class="summary-head">
+              <span>
+                <span class="muted">{parts.slice(0, -1).map((p) => `${p}/`).join("")}</span>
+                <b>{parts[parts.length - 1]}</b>
+              </span>
+              <span class="muted">{count(folder)}</span>
+            </div>
+            <p>{line(folder)}</p>
+          </div>
+        );
+      })}
+    </aside>
+  );
 }
 
 interface Link {
@@ -188,8 +236,45 @@ export function MapView(props: Props) {
 
   const maxWeight = Math.max(1, ...layout.nodes.filter((n) => n.node.kind === "file" || n.node.kind === "dir").map((n) => n.weight));
   // Highlight the branch leading to the selected file.
+  const [hoveredDir, setHoveredDir] = useState<string | null>(null);
   const onPath = new Set<Placed>();
-  for (let p = layout.nodes.find((n) => n.node.kind === "file" && n.node.path === selected) ?? null; p; p = p.parent) onPath.add(p);
+  const pathStart =
+    hoveredDir !== null
+      ? layout.nodes.find((n) => (hoveredDir === "" ? n.node.kind === "root" : n.node.kind === "dir" && n.node.path === hoveredDir))
+      : layout.nodes.find((n) => n.node.kind === "file" && n.node.path === selected);
+  for (let p = pathStart ?? null; p; p = p.parent) onPath.add(p);
+
+  // Folder summaries for the panel: one per folder on the map, plus "" for the whole change.
+  const [showSummary, setShowSummary] = usePersisted("mapSummary", true);
+  const [summaries, setSummaries] = useState<Record<string, Summary | null>>({});
+  const folders = useMemo(
+    () => ["", ...layout.nodes.filter((n) => n.node.kind === "dir" && n.node.files.length > 0).map((n) => (n.node as { path: string }).path)],
+    [layout],
+  );
+  const foldersKey = folders.join("|");
+  useEffect(() => setSummaries({}), [props.scope]);
+  useEffect(() => {
+    if (!showSummary || !files.length) return;
+    let live = true;
+    const t = setTimeout(() => {
+      api<{ summaries: Record<string, Summary | null> }>(`/api/repos/${repoId}/summaries`, { body: { scope: props.scope, folders } }).then(
+        (r) => live && setSummaries((cur) => ({ ...cur, ...r.summaries })),
+        () => {},
+      );
+    }, 1200);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [filesKey, foldersKey, showSummary, props.scope]);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (d.scope === props.scope) setSummaries((cur) => ({ ...cur, [d.folder]: d.summary }));
+    };
+    addEventListener("graphdiff:summary", on);
+    return () => removeEventListener("graphdiff:summary", on);
+  }, [props.scope]);
 
   useEffect(() => {
     scroller.current?.querySelector(".gnode.selected")?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -228,6 +313,8 @@ export function MapView(props: Props) {
 
   return (
     <div class="map">
+      <div class="map-main">
+      <div class="map-canvas">
       <div class="map-tools">
         {props.news.size > 0 && (
           <button class="btn small news-clear" onClick={props.onClearNews} title="Clear the new / updated tags">
@@ -235,6 +322,9 @@ export function MapView(props: Props) {
             {props.news.size} new · clear
           </button>
         )}
+        <button class={`btn small ${showSummary ? "on" : ""}`} onClick={() => setShowSummary(!showSummary)} title="One-line summaries of what changed in each folder">
+          Summary
+        </button>
         <button class={`btn small ${showLinks ? "on" : ""}`} onClick={() => setShowLinks(!showLinks)} title="Show which changed files import each other, and unchanged files that use them">
           Imports
         </button>
@@ -304,6 +394,20 @@ export function MapView(props: Props) {
           ))}
         </svg>
       </div>
+      </div>
+      {showSummary && (
+        <SummaryPanel
+          folders={folders}
+          files={files}
+          summaries={summaries}
+          onHover={setHoveredDir}
+          onPick={(folder) => {
+            const el = scroller.current?.querySelector(`[data-dir="${CSS.escape(folder)}"]`);
+            el?.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+          }}
+        />
+      )}
+      </div>
       <div class="map-legend" aria-hidden="true">
         <span><i class="ld s-A" />added</span>
         <span><i class="ld s-M" />modified</span>
@@ -335,6 +439,7 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
       <g
         class={`gnode ${n.kind} ${n.files.length === 0 ? "context" : all && props.reviewMode ? "all-done" : ""} ${props.onPath ? "hot" : ""} ${n.kind === "dir" && n.collapsed ? "collapsed" : ""}`}
         onClick={() => n.kind === "dir" && props.onToggle(n.path)}
+        data-dir={n.kind === "dir" ? n.path : ""}
         role="treeitem"
         aria-expanded={n.kind === "dir" ? !n.collapsed : true}
       >

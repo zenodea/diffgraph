@@ -19,6 +19,8 @@ export interface Config {
   /** Branch to compare against; auto-detected when null. */
   base: string | null;
   ask: { command: string[]; format: AskFormat };
+  /** One-line folder summaries on the map. `format` "claude-json" or "text". */
+  summary: { enabled: boolean; command: string[]; format: "claude-json" | "text" };
 }
 
 const defaults: Config = {
@@ -35,12 +37,18 @@ const defaults: Config = {
     ],
     format: "claude-stream-json",
   },
+  summary: {
+    enabled: true,
+    // Small, fast, no tools: it only reads the diff we hand it.
+    command: ["claude", "-p", "--model", "haiku", "--output-format", "json", "--no-session-persistence", "--tools", ""],
+    format: "claude-json",
+  },
 };
 
 export function loadConfig(): Config {
   try {
     const raw = JSON.parse(readFileSync(join(configDir, "config.json"), "utf8"));
-    return { ...defaults, ...raw, ask: { ...defaults.ask, ...raw.ask } };
+    return { ...defaults, ...raw, ask: { ...defaults.ask, ...raw.ask }, summary: { ...defaults.summary, ...raw.summary } };
   } catch {
     return defaults;
   }

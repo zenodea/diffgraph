@@ -10,6 +10,9 @@ Press `prefix+g` in a pane and your browser opens a live review page for that pa
   file changed. Hover a file to see what it imports and which files use it (unchanged
   importers show up faded, so you can see how far a change could reach). Files that are
   new or updated since you last looked get a small tag. Click a name to open its diff.
+- **What changed, in words.** A side panel on the map gives one plain sentence for the
+  whole change and one per folder, written by a small model (Claude Haiku by default)
+  and cached until that folder changes. Hover one to light up its branch.
 - **A file list too**, with the number left to review always in view. Folders show how
   many of their files you've done.
 - **Review mode, when you want it.** By default the page is just for looking around.
@@ -90,6 +93,10 @@ Optional, in `$(herdr plugin config-dir graphdiff)/config.json`:
   }
 }
 ```
+
+Folder summaries can be switched off with `"summary": { "enabled": false }`, or pointed
+at another command with `"summary": { "command": [...], "format": "text" }` (prompt on
+stdin, one sentence on stdout).
 
 `base` is the branch to compare against (detected when left out). `ask.command` is what
 answers questions inline. It gets the prompt on stdin and runs in the repo. The default is

@@ -9,6 +9,7 @@ import { HttpError, route } from "./http.ts";
 import { subscribe } from "./live.ts";
 import { repoOr404 } from "./repos.ts";
 import { setReviewed, sinceReview, withReviews } from "./review.ts";
+import { getSummaries } from "./summaries.ts";
 import { whyFor } from "./why.ts";
 
 route("GET", "/api/repos/:id/changes", async ({ params, url }) => {
@@ -77,4 +78,12 @@ route("GET", "/api/repos/:id/deps", async ({ params, url }) => {
   const repo = repoOr404(params.id);
   const changes = await getChanges(repo, parseScope(url.searchParams.get("scope")));
   return dependencies(repo.root, changes.files.map((f) => f.path));
+});
+
+route("POST", "/api/repos/:id/summaries", async ({ params, body }) => {
+  const repo = repoOr404(params.id);
+  const { scope, folders } = await body();
+  if (!Array.isArray(folders)) throw new HttpError(400, "folders required");
+  const changes = await getChanges(repo, parseScope(scope ?? null));
+  return { summaries: getSummaries(repo, changes, folders.map(String)) };
 });
