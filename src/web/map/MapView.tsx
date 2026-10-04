@@ -28,6 +28,9 @@ interface Props {
 const FONT = '13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 const BOLD = `600 ${FONT}`;
 const SMALL = '12px ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace';
+const UNTOUCHED = `italic 12px ${FONT.slice(5)}`;
+/** Entries in a folder the change didn't reach, shown in its pill. */
+const untouchedText = (n: number) => `· ${n} untouched`;
 const FRESH_MS = 2 * 60_000;
 
 let ctx: CanvasRenderingContext2D | null = null;
@@ -71,9 +74,13 @@ function dirMeta(files: ReviewedFile[], reviewMode: boolean) {
 function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>, reviewMode: boolean): number {
   switch (node.kind) {
     case "root":
-      return textWidth(node.name, `700 15px ${FONT.slice(5)}`) + 28;
+      return textWidth(node.name, `700 15px ${FONT.slice(5)}`) + 28 + (node.untouched ? 10 + textWidth(untouchedText(node.untouched), UNTOUCHED) : 0);
     case "dir":
-      return textWidth(node.name, BOLD) + 10 + textWidth(dirMeta(node.files, reviewMode), SMALL) + (node.collapsed ? 16 : 0) + 26 + (node.files.some((f) => news.has(f.path)) ? 12 : 0);
+      return (
+        textWidth(node.name, BOLD) + 10 + textWidth(dirMeta(node.files, reviewMode), SMALL) + (node.collapsed ? 16 : 0) + 26 +
+        (node.untouched ? 8 + textWidth(untouchedText(node.untouched), UNTOUCHED) : 0) +
+        (node.files.some((f) => news.has(f.path)) ? 12 : 0)
+      );
     case "file": {
       const f = node.file;
       let w = 22 + textWidth(node.name, FONT) + 10 + textWidth(statText(f), SMALL);
@@ -82,7 +89,6 @@ function measure(node: GraphNode, threads: Map<string, number>, news: Map<string
       if (threads.get(f.path)) w += 34;
       return w + 14;
     }
-    case "unchanged":
     case "ghost":
       return 22 + textWidth(node.name, `italic ${FONT}`);
   }
@@ -207,22 +213,11 @@ function placeLinks(nodes: Placed[], deps: Deps): Link[] {
   return [...out.values()];
 }
 
-/** With many files, open on the folder level: fold folders that hold more than a handful. */
-function autoCollapsed(files: ReviewedFile[]): string[] {
-  if (files.length <= 24) return [];
-  const counts = new Map<string, number>();
-  for (const f of files) {
-    const dir = f.path.split("/").slice(0, -1).join("/");
-    if (dir) counts.set(dir, (counts.get(dir) ?? 0) + 1);
-  }
-  return [...counts].filter(([, n]) => n > 4).map(([d]) => d);
-}
-
 export function MapView(props: Props) {
   const { files, allPaths, selected } = props;
   // null until you fold something yourself; then your choice sticks.
   const [savedCollapsed, setCollapsedList] = usePersisted<string[] | null>("mapCollapsed", null);
-  const collapsedList = savedCollapsed ?? autoCollapsed(files);
+  const collapsedList = savedCollapsed ?? [];
   const collapsed = useMemo(() => new Set(collapsedList), [collapsedList]);
   const entries = useMemo(() => (allPaths ? entriesByDir(allPaths) : null), [allPaths]);
   const [showLinks, setShowLinks] = usePersisted("mapLinks", false);
@@ -307,13 +302,15 @@ export function MapView(props: Props) {
     return () => removeEventListener("graphdiff:summary", on);
   }, [props.scope]);
 
-  // Open on the root, vertically centred: the shape of the change, not the middle of a list.
+  // Open on the whole shape: fitted when it's taller than the screen, otherwise at
+  // full size with the root on the left, vertically centred.
   const placed = useRef(false);
   useEffect(() => {
     const root = layout.nodes[0];
     if (placed.current || !pz.node || !root) return;
     placed.current = true;
-    pz.place(0, root.y, 0, 0.5, false);
+    if (layout.height > pz.node.clientHeight) pz.fit(width, layout.height);
+    else pz.place(0, root.y, 0, 0.5, false);
   }, [pz.node, layout]);
 
   // Keyboard selection pans the file into view.
@@ -378,7 +375,10 @@ export function MapView(props: Props) {
       </div>
       <div class={`map-scroll ${pz.dragging ? "dragging" : ""}`} ref={pz.ref}>
         <svg
-          class={`graph ${hovered ? "hovering" : ""}`}
+          // Zoomed far out, file names fade and dots grow: the shape is what's readable there.
+          class={`graph ${hovered ? "hovering" : ""} ${pz.view.k < 0.55 ? "far" : ""}`}
+          // Folder names grow as you zoom out, so the overview stays legible.
+          style={{ "--label-scale": String(Math.min(1.35, Math.max(1, 0.55 / pz.view.k))) }}
           width="100%"
           height="100%"
           role="tree"
@@ -400,23 +400,50 @@ export function MapView(props: Props) {
           >
           <g class="edges">
             {layout.nodes.map((n) => {
-              if (!n.parent) return null;
+              if (!n.parent || n.block) return null;
               const p = n.parent;
               const x1 = p.x + p.width;
               const x2 = n.x;
               const mid = (x1 + x2) / 2;
-              const unchanged = n.node.kind === "unchanged";
-              const files = n.node.kind === "file" ? [n.node.file] : n.node.kind === "dir" ? n.node.files : [];
+              const files = n.node.kind === "dir" ? n.node.files : [];
               const allDone = props.reviewMode && files.length > 0 && done(files) === files.length;
+              const d = `M${x1},${p.y} C${mid},${p.y} ${mid},${n.y} ${x2},${n.y}`;
               return (
                 <path
                   key={n.node.id}
-                  class={`edge ${unchanged ? "faint" : ""} ${allDone ? "done" : ""} ${onPath.has(n) ? "hot" : ""}`}
-                  d={`M${x1},${p.y} C${mid},${p.y} ${mid},${n.y} ${x2},${n.y}`}
+                  class={`edge ${allDone ? "done" : ""} ${onPath.has(n) ? "hot" : ""}`}
+                  d={d}
                   // As a CSS property too, so browsers that can animate it glide with the nodes.
-                  style={{ d: `path("M${x1},${p.y} C${mid},${p.y} ${mid},${n.y} ${x2},${n.y}")` }}
-                  stroke-width={unchanged ? 1 : 1.5 + 5 * Math.sqrt(n.weight / maxWeight)}
+                  style={{ d: `path("${d}")` }}
+                  stroke-width={1.5 + 5 * Math.sqrt(n.weight / maxWeight)}
                 />
+              );
+            })}
+            {layout.blocks.map((b) => {
+              // One branch into the block, a spine down its rows, and a short tick per row.
+              const p = b.parent;
+              const x1 = p.x + p.width;
+              const midY = (b.rows[0] + b.rows[b.rows.length - 1]) / 2;
+              const mid = (x1 + b.x) / 2;
+              const changed = b.items.flatMap((it) => (it.node.kind === "file" ? [it.node.file] : []));
+              const allDone = props.reviewMode && changed.length > 0 && done(changed) === changed.length;
+              const hot = b.items.some((it) => onPath.has(it));
+              const hotRow = b.items.find((it) => onPath.has(it))?.y;
+              const branch = `M${x1},${p.y} C${mid},${p.y} ${mid},${midY} ${b.x},${midY}`;
+              const spine = `M${b.x},${b.rows[0]} L${b.x},${b.rows[b.rows.length - 1]}`;
+              const width = 1.5 + 5 * Math.sqrt(b.weight / maxWeight);
+              return (
+                <g key={`b:${p.node.id}`} class={`comb ${allDone ? "done" : ""}`}>
+                  {b.rows.length > 1 && (
+                    <rect class="block-bg" x={b.x + 6} y={b.rows[0] - 15} width={b.right - b.x + 4} height={b.rows[b.rows.length - 1] - b.rows[0] + 30} rx={10} />
+                  )}
+                  <path class={`edge ${hot ? "hot" : ""} ${allDone ? "done" : ""}`} d={branch} style={{ d: `path("${branch}")` }} stroke-width={width} />
+                  {b.rows.length > 1 && <path class={`edge spine ${allDone ? "done" : ""}`} d={spine} style={{ d: `path("${spine}")` }} stroke-width={Math.min(width, 3)} />}
+                  {b.rows.map((y) => {
+                    const tick = `M${b.x},${y} L${b.x + 12},${y}`;
+                    return <path key={y} class={`edge tick ${hot && y === hotRow ? "hot" : ""} ${allDone ? "done" : ""}`} d={tick} style={{ d: `path("${tick}")` }} stroke-width={1.5} />;
+                  })}
+                </g>
               );
             })}
           </g>
@@ -498,7 +525,16 @@ function NodeBody(props: NodeProps) {
           {props.reviewMode ? `, ${d} reviewed` : ""}
           {n.kind === "dir" ? `\nClick to ${n.collapsed ? "expand" : "collapse"}` : ""}
         </title>
-        <rect x={p.x} y={top} width={p.width} height={24} rx={12} />
+        {/* Zoomed far out the pill drops its "untouched" note and shrinks to fit (see .far). */}
+        <rect
+          class="pill-rect"
+          x={p.x}
+          y={top}
+          width={p.width}
+          height={24}
+          rx={12}
+          style={{ "--far-w": `${n.untouched ? p.width - (n.kind === "root" ? 10 : 8) - textWidth(untouchedText(n.untouched), UNTOUCHED) : p.width}px` }}
+        />
         {/* Review progress along the bottom of the pill. */}
         {props.reviewMode && <rect class="pill-progress" x={p.x + 10} y={top + 20} width={n.files.length ? Math.max(0, (p.width - 20) * (d / n.files.length)) : 0} height={2} rx={1} />}
         <text x={p.x + 13} y={p.y + 4.5} class="pill-name">
@@ -508,6 +544,12 @@ function NodeBody(props: NodeProps) {
           <text x={p.x + 13 + nameW + 10} y={p.y + 4} class="pill-meta">
             {meta}
             {n.collapsed ? " ▸" : ""}
+            {n.untouched > 0 && <tspan class="pill-untouched" dx="8">{untouchedText(n.untouched)}</tspan>}
+          </text>
+        )}
+        {n.kind === "root" && n.untouched > 0 && (
+          <text x={p.x + 14 + nameW + 10} y={p.y + 4.5} class="pill-untouched">
+            {untouchedText(n.untouched)}
           </text>
         )}
         {n.kind === "dir" && n.files.some((f) => props.news.has(f.path)) && (
@@ -515,18 +557,6 @@ function NodeBody(props: NodeProps) {
             <title>Something here is new since you last looked</title>
           </circle>
         )}
-      </g>
-    );
-  }
-
-  if (n.kind === "unchanged") {
-    return (
-      <g class="gnode unchanged">
-        <title>Files and folders here that weren't touched</title>
-        <circle cx={p.x + 7} cy={p.y} r={4.5} />
-        <text x={p.x + 22} y={p.y + 4.5}>
-          {n.name}
-        </text>
       </g>
     );
   }

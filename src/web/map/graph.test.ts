@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ReviewedFile } from "../../server/review/review.ts";
-import { entriesByDir, layoutGraph, type Placed } from "./graph.ts";
+import { blockColumns, entriesByDir, layoutGraph, type Placed } from "./graph.ts";
 
 const file = (path: string, added = 1): ReviewedFile => ({ path, status: "M", added, deleted: 0, binary: false, untracked: false, mtime: null, lines: 10, review: null, reviewedAt: null });
-const names = (p: Placed): unknown => (p.children.length ? { [p.node.name]: p.children.map(names) } : p.node.name);
 const measure = () => 50;
 
 describe("changedShare", () => {
@@ -15,21 +14,38 @@ describe("changedShare", () => {
   });
 });
 
+/** The tree as nested names: folders map to their subfolders, then their files. */
+function shape(layout: ReturnType<typeof layoutGraph>, p: Placed = layout.nodes[0]): unknown {
+  const block = layout.blocks.find((b) => b.parent === p);
+  const kids = [...p.children.map((c) => shape(layout, c)), ...(block?.items.map((it) => it.node.name) ?? [])];
+  const label = p.node.kind === "dir" || p.node.kind === "root" ? `${p.node.name}${p.node.untouched ? ` (+${p.node.untouched})` : ""}` : p.node.name;
+  return kids.length ? { [label]: kids } : label;
+}
+
 describe("layoutGraph", () => {
   const files = [file("src/server/a.ts", 10), file("src/web/b.tsx", 30), file("README.md")];
   const all = ["src/server/a.ts", "src/server/old.ts", "src/web/b.tsx", "README.md", "LICENSE", "lib/only/x.ts"];
 
-  it("branches by folder and folds untouched entries into one node", () => {
-    const { nodes } = layoutGraph("repo", files, entriesByDir(all), new Set(), measure);
-    expect(names(nodes[0])).toEqual({
-      repo: [{ src: [{ server: ["a.ts", "1 unchanged"] }, { web: ["b.tsx"] }] }, "README.md", "2 unchanged"],
-    });
+  it("branches by folder and counts untouched entries on the folder", () => {
+    const layout = layoutGraph("repo", files, entriesByDir(all), new Set(), measure);
+    expect(shape(layout)).toEqual({ "repo (+2)": [{ src: [{ "server (+1)": ["a.ts"] }, { web: ["b.tsx"] }] }, "README.md"] });
   });
 
   it("only merges a folder chain when the outer folder holds nothing else", () => {
     const deep = [file("lib/only/x.ts")];
-    expect(names(layoutGraph("r", deep, entriesByDir(["lib/only/x.ts"]), new Set(), measure).nodes[0])).toEqual({ r: [{ "lib/only": ["x.ts"] }] });
-    expect(names(layoutGraph("r", deep, entriesByDir(["lib/only/x.ts", "lib/y.ts"]), new Set(), measure).nodes[0])).toEqual({ r: [{ lib: [{ only: ["x.ts"] }, "1 unchanged"] }] });
+    expect(shape(layoutGraph("r", deep, entriesByDir(["lib/only/x.ts"]), new Set(), measure))).toEqual({ r: [{ "lib/only": ["x.ts"] }] });
+    expect(shape(layoutGraph("r", deep, entriesByDir(["lib/only/x.ts", "lib/y.ts"]), new Set(), measure))).toEqual({ r: [{ "lib (+1)": [{ only: ["x.ts"] }] }] });
+  });
+
+  it("wraps a big folder's files into columns, filled top to bottom", () => {
+    const many = Array.from({ length: 12 }, (_, i) => file(`big/f${String(i).padStart(2, "0")}.ts`));
+    const layout = layoutGraph("repo", many, null, new Set(), measure);
+    const block = layout.blocks[0];
+    expect(blockColumns(12)).toBe(3);
+    expect(block.rows).toHaveLength(4);
+    const xs = [...new Set(block.items.map((it) => it.x))];
+    expect(xs).toHaveLength(3);
+    expect(block.items.filter((it) => it.x === xs[0]).map((it) => it.node.name)).toEqual(["f00.ts", "f01.ts", "f02.ts", "f03.ts"]);
   });
 
   it("puts parents midway between their children and weights by lines changed", () => {
@@ -40,9 +56,9 @@ describe("layoutGraph", () => {
   });
 
   it("collapses folders into a single node", () => {
-    const { nodes } = layoutGraph("repo", files, null, new Set(["src/web"]), measure);
-    const web = nodes.find((n) => n.node.name === "web")!;
-    expect(web.children).toEqual([]);
+    const layout = layoutGraph("repo", files, null, new Set(["src/web"]), measure);
+    const web = layout.nodes.find((n) => n.node.name === "web")!;
     expect(web.node.kind === "dir" && web.node.collapsed).toBe(true);
+    expect(layout.nodes.some((n) => n.node.name === "b.tsx")).toBe(false);
   });
 });

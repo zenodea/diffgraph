@@ -62,13 +62,12 @@
 .gnode.all-done rect:first-of-type { stroke: var(--done); }
 .pill-name { fill: var(--text); font-weight: 600; }
 .pill-meta { fill: var(--muted); font: 12px var(--mono); }
+.pill-untouched { fill: var(--faint); font: italic 12px var(--font); }
+.gnode.root .pill-untouched { fill: color-mix(in srgb, var(--bg) 55%, var(--text)); }
 .gnode.all-done .pill-meta { fill: var(--done); }
 .pill-progress { fill: var(--done); }
 .gnode.root .pill-progress { fill: var(--done); }
 
-.gnode.unchanged { cursor: default; }
-.gnode.unchanged circle { fill: none; stroke: var(--faint); stroke-width: 1.2; }
-.gnode.unchanged text { fill: var(--faint); font-style: italic; }
 
 .gnode.file .hit { fill: transparent; }
 .gnode.file:hover .hit { fill: var(--panel-2); }
@@ -126,3 +125,16 @@
 .news-tag-svg rect { fill: var(--accent-fill); }
 .news-tag-svg text { fill: #fff; font-size: 11px; font-weight: 600; }
 .news-pip { fill: var(--accent); }
+
+/* Zoomed far out: names fade, dots grow, folders stay. */
+.fname, .fstat, .qcount, .news-tag-svg, .again-tag, .gnode.ghost text { transition: opacity 0.25s; }
+.graph.far .fname, .graph.far .fstat, .graph.far .qcount, .graph.far .news-tag-svg, .graph.far .again-tag, .graph.far .gnode.ghost text { opacity: 0; }
+.dot { transform-box: fill-box; transform-origin: center; transition: transform 0.25s var(--ease-out, ease); }
+.graph.far .dot { transform: scale(1.7); }
+.block-bg { fill: color-mix(in srgb, var(--text) 3%, transparent); stroke: color-mix(in srgb, var(--text) 5%, transparent); }
+.gpos > .gnode.dir, .gpos > .gnode.root { transition: transform 0.25s; }
+.pill-rect { transition: width 0.25s; }
+.pill-untouched { transition: opacity 0.2s; }
+.graph.far .pill-rect { width: var(--far-w); }
+.graph.far .pill-untouched { opacity: 0; }
+.graph.far .gpos > .gnode.dir, .graph.far .gpos > .gnode.root { transform: scale(var(--label-scale)); }
