@@ -2,7 +2,7 @@ import { watch, type FSWatcher } from "node:fs";
 import type { ServerResponse } from "node:http";
 import { fingerprint } from "../git/git.ts";
 import { getAgent } from "./herdr.ts";
-import type { Repo } from "./repos.ts";
+import { currentRepo, type Repo } from "./repos.ts";
 
 /** Paths whose churn never changes a diff (and can be huge). */
 const IGNORED = /(^|\/)(node_modules|\.git\/(objects|logs|lfs)|\.DS_Store$)(\/|$)/;
@@ -96,6 +96,8 @@ class Hub {
   }
 
   private async pollAgent() {
+    // Opening graphdiff again from another pane re-registers the repo; follow it.
+    this.repo = currentRepo(this.repo.id) ?? this.repo;
     if (this.repo.paneId) {
       const agent = await getAgent(this.repo.paneId).catch(() => null);
       const status = agent ? `${agent.agent}:${agent.status}` : null;

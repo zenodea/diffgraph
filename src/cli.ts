@@ -70,8 +70,71 @@ async function open() {
   const repo = (await res.json()) as { id: string };
   const url = `${base}/r/${repo.id}?t=${info.token}`;
   console.log(url);
+  if (await focusExistingTab(`${base}/r/${repo.id}`)) return;
   const opener = process.platform === "darwin" ? "open" : "xdg-open";
   spawn(opener, [url], { detached: true, stdio: "ignore" }).unref();
+}
+
+const chromeLike = ["Google Chrome", "Brave Browser", "Microsoft Edge"];
+
+/** Running apps among `names`, checked without AppleScript (which would ask "where is X?" for apps that aren't installed). */
+async function running(names: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const n of names) if ((await run("pgrep", ["-x", n])).code === 0) out.push(n);
+  return out;
+}
+
+/**
+ * On macOS, brings an already-open graphdiff tab for this repo to the front
+ * instead of opening another. Only asks browsers that are already running; if
+ * macOS hasn't been allowed to let herdr control them, this quietly gives up.
+ */
+async function focusExistingTab(prefix: string): Promise<boolean> {
+  if (process.platform !== "darwin") return false;
+  const live = await running([...chromeLike, "Safari"]);
+  if (!live.length) return false;
+  const q = JSON.stringify(prefix);
+  const chrome = (app: string) => `
+  tell application "${app}"
+    repeat with w in windows
+      set i to 0
+      repeat with t in tabs of w
+        set i to i + 1
+        if URL of t starts with ${q} then
+          set active tab index of w to i
+          set index of w to 1
+          activate
+          return "found"
+        end if
+      end repeat
+    end repeat
+  end tell`;
+  const safari = `
+  tell application "Safari"
+    repeat with w in windows
+      repeat with t in tabs of w
+        if URL of t starts with ${q} then
+          set current tab of w to t
+          set index of w to 1
+          activate
+          return "found"
+        end if
+      end repeat
+    end repeat
+  end tell`;
+  const script = [...live.filter((a) => a !== "Safari").map(chrome), ...(live.includes("Safari") ? [safari] : []), 'return "none"'].join("\n");
+  return new Promise((resolve) => {
+    const child = spawn("osascript", ["-e", script], { stdio: ["ignore", "pipe", "ignore"] });
+    let out = "";
+    child.stdout.on("data", (c) => (out += c));
+    // A permission prompt left unanswered shouldn't hold up opening the page.
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve(false);
+    }, 4000);
+    child.on("error", () => (clearTimeout(timer), resolve(false)));
+    child.on("close", () => (clearTimeout(timer), resolve(out.trim() === "found")));
+  });
 }
 
 async function stop() {

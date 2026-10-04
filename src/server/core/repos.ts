@@ -38,3 +38,8 @@ export function repoOr404(id: string): Repo {
   if (!repo) throw new HttpError(404, "Unknown repo. Open graphdiff from herdr again (prefix+g).");
   return repo;
 }
+
+/** The latest registration of a repo (its pane can change when you open it from elsewhere). */
+export function currentRepo(id: string): Repo | undefined {
+  return repos.get(id);
+}
