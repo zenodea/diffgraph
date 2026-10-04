@@ -1,4 +1,6 @@
-import type { ChangedFile } from "../server/git.ts";
+import type { ReviewedFile } from "../server/review.ts";
+
+type ChangedFile = ReviewedFile;
 
 export interface TreeNode {
   name: string;

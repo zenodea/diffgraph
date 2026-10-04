@@ -5,8 +5,7 @@ import { extname, join, normalize } from "node:path";
 import { loadConfig, stateDir } from "./env.ts";
 import { HttpError, match, readBody, route, sendJson } from "./http.ts";
 import { registerRepo, repoOr404 } from "./repos.ts";
-import "./changes.ts";
-import "./fileDiff.ts";
+import "./routes.ts";
 
 const root = join(import.meta.dirname, "../..");
 const webDir = join(root, "dist/web");
