@@ -6,6 +6,7 @@ import { api, repoId } from "./api.ts";
 import { DiffView, type ViewMode } from "./DiffView.tsx";
 import { Check } from "./icons.tsx";
 import { DiffStat, StatusBadge } from "./Tree.tsx";
+import { WhyPanel } from "./WhyPanel.tsx";
 import { ago } from "./util.ts";
 
 export const modes: { id: ViewMode; label: string }[] = [
@@ -78,6 +79,8 @@ export function FilePane({ file, scope, mode, setMode, onReview }: Props) {
           </button>
         </div>
       )}
+
+      <WhyPanel path={file.path} scope={scope} version={version} />
 
       {error ? (
         <div class="diff-note">{error}</div>

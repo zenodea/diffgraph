@@ -7,6 +7,7 @@ import { HttpError, route } from "./http.ts";
 import { subscribe } from "./live.ts";
 import { repoOr404 } from "./repos.ts";
 import { setReviewed, sinceReview, withReviews } from "./review.ts";
+import { whyFor } from "./why.ts";
 
 route("GET", "/api/repos/:id/changes", async ({ params, url }) => {
   const repo = repoOr404(params.id);
@@ -41,3 +42,9 @@ route("GET", "/api/repos/:id/since-review", async ({ params, url }) => {
 });
 
 route("GET", "/api/repos/:id/events", ({ params, res }) => subscribe(repoOr404(params.id), res));
+
+route("GET", "/api/repos/:id/why", async ({ params, url }) => {
+  const repo = repoOr404(params.id);
+  const changes = await getChanges(repo, parseScope(url.searchParams.get("scope")));
+  return { entries: await whyFor(repo, changes.from, url.searchParams.get("path") ?? "") };
+});

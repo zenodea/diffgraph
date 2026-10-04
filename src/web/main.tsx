@@ -11,18 +11,27 @@ import { Check } from "./icons.tsx";
 import { useLive, useTick, type Live } from "./live.ts";
 import { DiffStat, Tree } from "./Tree.tsx";
 import { buildTree, visibleOrder } from "./tree.ts";
-import { plural } from "./util.ts";
+import { ago, plural } from "./util.ts";
 import "./styles.css";
 
 type Reviewed = Omit<Changes, "files"> & { files: ReviewedFile[] };
 
-const scopes: { id: Scope; label: string; hint: (c: Reviewed) => string }[] = [
+const scopes: { id: Scope; label: string; hint: (c: Reviewed) => string; available?: (c: Reviewed) => boolean }[] = [
   {
     id: "branch",
     label: "Branch",
     hint: (c) => (c.base ? `Everything since ${c.branch ?? "HEAD"} left ${c.base}, plus uncommitted work` : "No base branch found: showing uncommitted work"),
   },
   { id: "uncommitted", label: "Uncommitted", hint: () => "Only what isn't committed yet (staged, unstaged, new files)" },
+  {
+    id: "session",
+    label: "This session",
+    hint: (c) =>
+      c.session
+        ? `Files the ${c.session.agent} agent in this pane edited since its session started${c.session.startedAt ? ` ${ago(Date.parse(c.session.startedAt))}` : ""} (${plural(c.session.prompts, "prompt")})`
+        : "Needs the transcript of the agent in this pane (Claude Code, Codex or pi); none was found",
+    available: (c) => !!c.session,
+  },
 ];
 
 const modeKeys: Record<string, ViewMode> = { "1": "unified", "2": "split", "3": "full" };
@@ -42,7 +51,13 @@ function App() {
 
   const [recent, setRecent] = useState<Map<string, number>>(new Map());
 
-  const load = () => api<Reviewed>(`/api/repos/${repoId}/changes?scope=${scope}`).then(setChanges, (e) => setError(e.message));
+  const load = () =>
+    api<Reviewed>(`/api/repos/${repoId}/changes?scope=${scope}`).then(setChanges, (e) => {
+      if (scope === "session") {
+        setToast(e.message);
+        setScope("branch");
+      } else setError(e.message);
+    });
   const live = useLive((paths) => {
     if (repo) load();
     if (!paths.length) return;
@@ -164,7 +179,15 @@ function App() {
         </div>
         <div class="segmented" role="tablist" aria-label="What to compare">
           {scopes.map((s) => (
-            <button key={s.id} role="tab" aria-selected={scope === s.id} class={scope === s.id ? "on" : ""} title={s.hint(changes)} onClick={() => setScope(s.id)}>
+            <button
+              key={s.id}
+              role="tab"
+              aria-selected={scope === s.id}
+              class={scope === s.id ? "on" : ""}
+              title={s.hint(changes)}
+              disabled={s.available && !s.available(changes) && scope !== s.id}
+              onClick={() => setScope(s.id)}
+            >
               {s.label}
             </button>
           ))}
