@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { stateDir } from "./env.ts";
+import { HttpError } from "./http.ts";
 
 export interface Repo {
   id: string;
@@ -32,6 +33,8 @@ export function registerRepo(root: string, paneId: string | null, agent: string 
   return repo;
 }
 
-export function getRepo(id: string): Repo | undefined {
-  return repos.get(id);
+export function repoOr404(id: string): Repo {
+  const repo = repos.get(id);
+  if (!repo) throw new HttpError(404, "Unknown repo. Open graphdiff from herdr again (prefix+g).");
+  return repo;
 }

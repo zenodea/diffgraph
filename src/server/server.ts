@@ -4,7 +4,8 @@ import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { loadConfig, stateDir } from "./env.ts";
 import { HttpError, match, readBody, route, sendJson } from "./http.ts";
-import { getRepo, registerRepo } from "./repos.ts";
+import { registerRepo, repoOr404 } from "./repos.ts";
+import "./changes.ts";
 
 const root = join(import.meta.dirname, "../..");
 const webDir = join(root, "dist/web");
@@ -54,12 +55,6 @@ route("POST", "/api/shutdown", ({ res }) => {
   res.on("finish", () => shutdown());
   return { ok: true };
 });
-
-export function repoOr404(id: string) {
-  const repo = getRepo(id);
-  if (!repo) throw new HttpError(404, "Unknown repo. Open graphdiff from herdr again (prefix+g).");
-  return repo;
-}
 
 function shutdown(): never {
   try {
