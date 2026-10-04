@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { loadConfig, stateDir } from "./env.ts";
 import { HttpError, match, readBody, route, sendJson } from "./http.ts";
+import { liveConnections } from "./live.ts";
 import { registerRepo, repoOr404 } from "./repos.ts";
 import "./routes.ts";
 
@@ -30,8 +31,6 @@ function loadToken(): string {
   }
 }
 
-/** Long-lived connections (SSE); the server stays up while any are open. */
-export const liveConnections = new Set<unknown>();
 let lastActivity = Date.now();
 
 const types: Record<string, string> = {

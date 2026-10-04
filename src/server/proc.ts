@@ -7,15 +7,22 @@ export interface RunResult {
 }
 
 /** Runs a command to completion. Never throws on a non-zero exit; callers check `code`. */
-export async function run(cmd: string, args: string[], opts: { cwd?: string; input?: string } = {}): Promise<RunResult> {
+interface RunOptions {
+  cwd?: string;
+  input?: string;
+  env?: Record<string, string>;
+}
+
+export async function run(cmd: string, args: string[], opts: RunOptions = {}): Promise<RunResult> {
   const res = await runBytes(cmd, args, opts);
   return { code: res.code, stdout: res.stdout.toString("utf8"), stderr: res.stderr };
 }
 
 /** Like run, but keeps stdout as bytes (for images). */
-export function runBytes(cmd: string, args: string[], opts: { cwd?: string; input?: string } = {}): Promise<{ code: number; stdout: Buffer; stderr: string }> {
+export function runBytes(cmd: string, args: string[], opts: RunOptions = {}): Promise<{ code: number; stdout: Buffer; stderr: string }> {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, stdio: ["pipe", "pipe", "pipe"] });
+    const env = opts.env ? { ...process.env, ...opts.env } : process.env;
+    const child = spawn(cmd, args, { cwd: opts.cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     child.stdout.on("data", (b) => out.push(b));

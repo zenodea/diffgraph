@@ -5,14 +5,17 @@ import { run } from "./proc.ts";
 
 export { EMPTY_TREE };
 
+// Stops git from refreshing .git/index as a side effect, which would wake our own watcher.
+const env = { GIT_OPTIONAL_LOCKS: "0" };
+
 export async function git(root: string, args: string[], okCodes = [0]): Promise<string> {
-  const res = await run("git", ["-c", "core.quotepath=off", ...args], { cwd: root });
+  const res = await run("git", ["-c", "core.quotepath=off", ...args], { cwd: root, env });
   if (!okCodes.includes(res.code)) throw new Error(`git ${args[0]} failed: ${res.stderr.trim()}`);
   return res.stdout;
 }
 
 async function tryGit(root: string, args: string[]): Promise<string | null> {
-  const res = await run("git", args, { cwd: root });
+  const res = await run("git", args, { cwd: root, env });
   return res.code === 0 ? res.stdout.trim() : null;
 }
 
@@ -165,4 +168,15 @@ async function countLines(file: string): Promise<{ lines: number; binary: boolea
 export async function allFiles(root: string): Promise<string[]> {
   const out = await git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
   return [...new Set(out.split("\0").filter(Boolean))].sort();
+}
+
+/** Cheap fingerprint of the working tree and HEAD; changes whenever any diff could. */
+export async function fingerprint(root: string): Promise<string> {
+  const [head, status] = await Promise.all([
+    tryGit(root, ["rev-parse", "-q", "--verify", "HEAD"]),
+    git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
+  ]);
+  const paths = status.split("\0").filter(Boolean).map((e) => e.slice(3));
+  const mtimes = await Promise.all(paths.map((p) => stat(join(root, p)).then((s) => s.mtimeMs, () => 0)));
+  return `${head}\n${status}\n${mtimes.join(",")}`;
 }

@@ -390,6 +390,26 @@ kbd {
   cursor: pointer;
 }
 
+/* Live */
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--done); }
+.live.off .dot { background: var(--faint); }
+.live.working { color: var(--accent); }
+.live.working .dot { background: var(--accent); animation: breathe 1.4s ease-in-out infinite; }
+.live.blocked { color: var(--warn); font-weight: 600; }
+.live.blocked .dot { background: var(--warn); }
+@keyframes breathe { 50% { opacity: 0.3; transform: scale(0.75); } }
+
+.fresh { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.row.flash { animation: flash 2.4s ease-out; }
+@keyframes flash { 0%, 30% { background: color-mix(in srgb, var(--accent) 28%, transparent); } }
+
+.banner.info { background: var(--accent-soft); color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .row.flash, .live.working .dot { animation: none; }
+}
+
 .notice { max-width: 520px; margin: 18vh auto; padding: 0 16px; text-align: center; }
 .notice h1 { font-size: 20px; font-weight: 650; margin: 0 0 8px; }
 .notice p { color: var(--muted); margin: 0; }

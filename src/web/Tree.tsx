@@ -12,7 +12,11 @@ interface Props {
   onReview: (files: ReviewedFile[], reviewed: boolean) => void;
   /** Reviewed files are filtered out, so folder counts show what's left instead. */
   hideReviewed: boolean;
+  /** When the watcher last saw each path change (ms). */
+  recent: Map<string, number>;
 }
+
+const FRESH_MS = 2 * 60_000;
 
 export function Tree(props: Props) {
   return (
@@ -31,9 +35,21 @@ function Node(props: Props & { node: TreeNode; depth: number }) {
   if (!node.dir) {
     const f = node.file;
     const selected = props.selected === node.path;
+    const seen = props.recent.get(node.path) ?? 0;
+    const touched = Math.max(seen, f?.mtime ?? 0);
+    const fresh = !!f && Date.now() - touched < FRESH_MS;
     const cls = ["row", "file", f ? "changed" : "unchanged", selected && "selected", f?.status === "D" && "deleted", f?.review && `r-${f.review}`];
     return (
-      <div class={cls.filter(Boolean).join(" ")} style={pad} role="treeitem" aria-selected={selected} data-path={node.path} onClick={() => f && props.onSelect(node.path)}>
+      <div
+        // Re-keying on each watcher hit restarts the flash animation.
+        key={seen}
+        class={[...cls, seen && Date.now() - seen < 3000 && "flash"].filter(Boolean).join(" ")}
+        style={pad}
+        role="treeitem"
+        aria-selected={selected}
+        data-path={node.path}
+        onClick={() => f && props.onSelect(node.path)}
+      >
         {f ? <ReviewCircle files={[f]} onReview={props.onReview} /> : <span class="circle-spacer" />}
         {f ? <StatusBadge file={f} /> : <span class="badge-spacer" />}
         <span class="name" title={node.path}>
@@ -41,6 +57,7 @@ function Node(props: Props & { node: TreeNode; depth: number }) {
           {f?.oldPath && <span class="renamed-from"> ← {f.oldPath.split("/").pop()}</span>}
         </span>
         {f?.review === "changed" && <span class="again" title="Edited again after you reviewed it">edited again</span>}
+        {fresh && <span class="fresh" title="Changed in the last 2 minutes" />}
         {f && <DiffStat file={f} />}
       </div>
     );

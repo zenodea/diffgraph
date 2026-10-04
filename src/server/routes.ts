@@ -4,6 +4,7 @@ import { fileDiff, sendImage } from "./fileDiff.ts";
 import { loadConfig } from "./env.ts";
 import { allFiles, repoState } from "./git.ts";
 import { HttpError, route } from "./http.ts";
+import { subscribe } from "./live.ts";
 import { repoOr404 } from "./repos.ts";
 import { setReviewed, sinceReview, withReviews } from "./review.ts";
 
@@ -38,3 +39,5 @@ route("GET", "/api/repos/:id/since-review", async ({ params, url }) => {
   const changes = await getChanges(repo, parseScope(url.searchParams.get("scope")));
   return sinceReview(repo, changes, url.searchParams.get("path") ?? "");
 });
+
+route("GET", "/api/repos/:id/events", ({ params, res }) => subscribe(repoOr404(params.id), res));

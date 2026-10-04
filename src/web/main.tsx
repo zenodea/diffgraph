@@ -8,6 +8,7 @@ import type { ViewMode } from "./DiffView.tsx";
 import { FilePane } from "./FilePane.tsx";
 import { readHashPath, useHashPath, useKeys, usePersisted } from "./hooks.ts";
 import { Check } from "./icons.tsx";
+import { useLive, useTick, type Live } from "./live.ts";
 import { DiffStat, Tree } from "./Tree.tsx";
 import { buildTree, visibleOrder } from "./tree.ts";
 import { plural } from "./util.ts";
@@ -39,7 +40,17 @@ function App() {
   const [selected, setSelected] = useHashPath();
   const [mode, setMode] = usePersisted<ViewMode>("mode", "unified");
 
+  const [recent, setRecent] = useState<Map<string, number>>(new Map());
+
   const load = () => api<Reviewed>(`/api/repos/${repoId}/changes?scope=${scope}`).then(setChanges, (e) => setError(e.message));
+  const live = useLive((paths) => {
+    if (repo) load();
+    if (!paths.length) return;
+    const next = new Map(recent);
+    for (const p of paths) next.set(p, Date.now());
+    setRecent(next);
+  });
+  useTick(15_000);
 
   useEffect(() => {
     api<Repo>(`/api/repos/${repoId}`).then(setRepo, (e) => setError(e.message));
@@ -163,6 +174,7 @@ function App() {
           <span>{plural(files.length, "file")}</span>
           <DiffStat file={totals} />
         </div>
+        <LiveStatus live={live} />
         {files.length > 0 && <Progress done={done} total={files.length} onNext={() => { const n = nextUnreviewed(); n && setSelected(n.path); }} />}
       </header>
 
@@ -181,7 +193,7 @@ function App() {
           {files.length === 0 && !showAll ? (
             <div class="sidebar-empty">No changes in this scope.</div>
           ) : (
-            <Tree root={tree} selected={selected} collapsed={collapsed} onSelect={setSelected} onToggle={toggle} onReview={(fs, r) => review(fs, r)} hideReviewed={hideReviewed} />
+            <Tree root={tree} selected={selected} collapsed={collapsed} onSelect={setSelected} onToggle={toggle} onReview={(fs, r) => review(fs, r)} hideReviewed={hideReviewed} recent={recent} />
           )}
           <div class="keys-hint">
             <span><kbd>j</kbd> <kbd>k</kbd> move</span>
@@ -191,6 +203,14 @@ function App() {
           </div>
         </aside>
         <main class="main">
+          {live.superseded && (
+            <div class="banner info">
+              <span>graphdiff opened this repo in a newer tab. You can close this one.</span>
+              <button class="link" onClick={live.dismissSuperseded}>
+                Keep using this tab
+              </button>
+            </div>
+          )}
           {current ? (
             <FilePane file={current} scope={scope} mode={mode} setMode={setMode} onReview={(r) => review([current], r, true)} />
           ) : (
@@ -204,6 +224,23 @@ function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function LiveStatus({ live }: { live: Live }) {
+  const [name, status] = live.agent?.split(":") ?? [];
+  const working = status === "working";
+  const label = !live.connected ? "Reconnecting…" : name ? `${name} ${status === "done" || status === "idle" ? "is idle" : status === "blocked" ? "needs you" : status === "working" ? "is working" : status}` : "Live";
+  const title = !live.connected
+    ? "Lost the connection to the graphdiff server. It reconnects by itself; if it doesn't, press prefix+g in herdr."
+    : working
+      ? "The agent is still working, so more changes may arrive. The page updates by itself."
+      : "Updates by itself as files change";
+  return (
+    <span class={`live ${live.connected ? "on" : "off"} ${working ? "working" : ""} ${status === "blocked" ? "blocked" : ""}`} title={title}>
+      <span class="dot" />
+      {label}
+    </span>
   );
 }
 
