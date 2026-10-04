@@ -54,8 +54,8 @@ export function App() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useHashPath();
   const [mode, setMode] = usePersisted<ViewMode>("mode", "unified");
-  // The map is home; a file in the URL (a reload, a link) goes straight to its diff.
-  const [view, setView] = useState<"map" | "diff">(() => (readHashPath() ? "diff" : "map"));
+  // Always open on the map; a file in the URL just starts out selected.
+  const [view, setView] = useState<"map" | "diff">("map");
 
   const [recent, setRecent] = useState<Map<string, number>>(new Map());
 
