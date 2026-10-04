@@ -126,5 +126,9 @@
 .news-tag-svg text { fill: #fff; font-size: 11px; font-weight: 600; }
 .news-pip { fill: var(--accent); }
 
-.block-bg { fill: color-mix(in srgb, var(--text) 3%, transparent); stroke: color-mix(in srgb, var(--text) 5%, transparent); }
+.block-bg { fill: color-mix(in srgb, var(--text) 3%, transparent); stroke: color-mix(in srgb, var(--text) 7%, transparent); transition: stroke 0.2s, fill 0.2s; }
+.block-port { fill: var(--edge); transition: fill 0.2s; }
+.comb.hot .block-bg { stroke: color-mix(in srgb, var(--accent) 45%, transparent); }
+.comb.hot .block-port { fill: var(--accent); }
+.comb.done .block-port { fill: color-mix(in srgb, var(--done) 55%, transparent); }
 .gnode.dir.focused rect:first-of-type { stroke: var(--accent); stroke-width: 2; fill: var(--accent-soft); }

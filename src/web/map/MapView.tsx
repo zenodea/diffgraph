@@ -463,29 +463,25 @@ export function MapView(props: Props) {
               );
             })}
             {layout.blocks.map((b) => {
-              // One branch into the block, a spine down its rows, and a short tick per row.
+              // The branch curves into the middle of the block's left edge; the box does the grouping.
+              // A one-file folder has no box, so its branch runs straight to the file.
               const p = b.parent;
               const x1 = p.x + p.width;
+              const boxed = b.rows.length > 1;
               const midY = (b.rows[0] + b.rows[b.rows.length - 1]) / 2;
-              const mid = (x1 + b.x) / 2;
+              const x2 = boxed ? b.x + 6 : b.items[0].x;
+              const mid = (x1 + x2) / 2;
               const changed = b.items.flatMap((it) => (it.node.kind === "file" ? [it.node.file] : []));
               const allDone = props.reviewMode && changed.length > 0 && done(changed) === changed.length;
               const hot = b.items.some((it) => onPath.has(it));
-              const hotRow = b.items.find((it) => onPath.has(it))?.y;
-              const branch = `M${x1},${p.y} C${mid},${p.y} ${mid},${midY} ${b.x},${midY}`;
-              const spine = `M${b.x},${b.rows[0]} L${b.x},${b.rows[b.rows.length - 1]}`;
-              const width = 1.5 + 5 * Math.sqrt(b.weight / maxWeight);
+              const branch = `M${x1},${p.y} C${mid},${p.y} ${mid},${midY} ${x2},${midY}`;
               return (
-                <g key={`b:${p.node.id}`} class={`comb ${allDone ? "done" : ""}`}>
-                  {b.rows.length > 1 && (
+                <g key={`b:${p.node.id}`} class={`comb ${hot ? "hot" : ""} ${allDone ? "done" : ""}`}>
+                  {boxed && (
                     <rect class="block-bg" x={b.x + 6} y={b.rows[0] - 19} width={b.right - b.x + 10} height={b.rows[b.rows.length - 1] - b.rows[0] + 38} rx={12} />
                   )}
-                  <path class={`edge ${hot ? "hot" : ""} ${allDone ? "done" : ""}`} d={branch} style={{ d: `path("${branch}")` }} stroke-width={width} />
-                  {b.rows.length > 1 && <path class={`edge spine ${allDone ? "done" : ""}`} d={spine} style={{ d: `path("${spine}")` }} stroke-width={Math.min(width, 3)} />}
-                  {b.rows.map((y) => {
-                    const tick = `M${b.x},${y} L${b.x + 16},${y}`;
-                    return <path key={y} class={`edge tick ${hot && y === hotRow ? "hot" : ""} ${allDone ? "done" : ""}`} d={tick} style={{ d: `path("${tick}")` }} stroke-width={1.5} />;
-                  })}
+                  <path class={`edge ${hot ? "hot" : ""} ${allDone ? "done" : ""}`} d={branch} style={{ d: `path("${branch}")` }} stroke-width={1.5 + 5 * Math.sqrt(b.weight / maxWeight)} />
+                  {boxed && <circle class="block-port" cx={x2} cy={midY} r={3.5} />}
                 </g>
               );
             })}
