@@ -7,7 +7,9 @@ export type GraphNode =
   | { kind: "root"; id: string; name: string; files: ReviewedFile[] }
   | { kind: "dir"; id: string; name: string; path: string; files: ReviewedFile[]; collapsed: boolean }
   | { kind: "file"; id: string; name: string; path: string; file: ReviewedFile }
-  | { kind: "unchanged"; id: string; name: string; count: number };
+  | { kind: "unchanged"; id: string; name: string; count: number }
+  /** An unchanged file that imports a changed one (shown for context). */
+  | { kind: "ghost"; id: string; name: string; path: string };
 
 export interface Placed {
   node: GraphNode;
@@ -32,6 +34,7 @@ interface Dir {
   path: string;
   dirs: Map<string, Dir>;
   files: ReviewedFile[];
+  ghosts: string[];
 }
 
 const ROW = 32;
@@ -57,7 +60,8 @@ const weightOf = (files: ReviewedFile[]) => files.reduce((n, f) => n + (f.binary
 /**
  * Builds and places the graph. `entries` (from the full repo listing) adds the
  * "n unchanged" nodes and keeps folder chains honest: "src/server" is only folded
- * into one node when "src" holds nothing else. `measure` gives a label's width in px.
+ * into one node when "src" holds nothing else. `ghosts` are unchanged files to show
+ * for context (importers of changed files). `measure` gives a label's width in px.
  */
 export function layoutGraph(
   repoName: string,
@@ -65,25 +69,28 @@ export function layoutGraph(
   entries: Map<string, Set<string>> | null,
   collapsed: Set<string>,
   measure: (node: GraphNode) => number,
+  ghosts: string[] = [],
 ): Layout {
-  const top: Dir = { name: "", path: "", dirs: new Map(), files: [] };
-  for (const f of files) {
-    const parts = f.path.split("/");
+  const top: Dir = { name: "", path: "", dirs: new Map(), files: [], ghosts: [] };
+  const dirFor = (path: string) => {
+    const parts = path.split("/");
     let d = top;
     for (let i = 0; i < parts.length - 1; i++) {
-      const path = parts.slice(0, i + 1).join("/");
-      if (!d.dirs.has(parts[i])) d.dirs.set(parts[i], { name: parts[i], path, dirs: new Map(), files: [] });
+      const sub = parts.slice(0, i + 1).join("/");
+      if (!d.dirs.has(parts[i])) d.dirs.set(parts[i], { name: parts[i], path: sub, dirs: new Map(), files: [], ghosts: [] });
       d = d.dirs.get(parts[i])!;
     }
-    d.files.push(f);
-  }
+    return d;
+  };
+  for (const f of files) dirFor(f.path).files.push(f);
+  for (const g of ghosts) dirFor(g).ghosts.push(g);
 
   const all = (d: Dir): ReviewedFile[] => [...d.files, ...[...d.dirs.values()].flatMap(all)];
 
   const build = (d: Dir, depth: number, parent: Placed | null, root = false): Placed => {
     // Fold "a" → "b" while "a" contains only "b" (in the real repo, when we know it).
     let name = d.name;
-    while (!root && d.files.length === 0 && d.dirs.size === 1) {
+    while (!root && d.files.length === 0 && d.ghosts.length === 0 && d.dirs.size === 1) {
       const only = [...d.dirs.values()][0];
       const real = entries?.get(d.path);
       if (real && real.size !== 1) break;
@@ -103,9 +110,12 @@ export function layoutGraph(
       const name = f.path.split("/").pop()!;
       placed.children.push({ node: { kind: "file", id: `f:${f.path}`, name, path: f.path, file: f }, depth: depth + 1, x: 0, y: 0, width: 0, parent: placed, children: [], weight: weightOf([f]) });
     }
+    for (const g of [...d.ghosts].sort()) {
+      placed.children.push({ node: { kind: "ghost", id: `g:${g}`, name: g.split("/").pop()!, path: g }, depth: depth + 1, x: 0, y: 0, width: 0, parent: placed, children: [], weight: 0 });
+    }
     const real = entries?.get(d.path);
     if (real) {
-      const touched = new Set([...d.dirs.keys(), ...d.files.map((f) => f.path.split("/").pop()!)]);
+      const touched = new Set([...d.dirs.keys(), ...d.files.map((f) => f.path.split("/").pop()!), ...d.ghosts.map((g) => g.split("/").pop()!)]);
       const count = [...real].filter((n) => !touched.has(n)).length;
       if (count) {
         placed.children.push({ node: { kind: "unchanged", id: `u:${d.path}`, name: `${count} unchanged`, count }, depth: depth + 1, x: 0, y: 0, width: 0, parent: placed, children: [], weight: 0 });

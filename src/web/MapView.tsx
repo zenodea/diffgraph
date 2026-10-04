@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useRef } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { Deps } from "../server/deps.ts";
+import type { Scope } from "../server/git.ts";
 import type { ReviewedFile } from "../server/review.ts";
 import { changedShare } from "../shared.ts";
 import { entriesByDir, layoutGraph, type GraphNode, type Placed } from "./graph.ts";
+import { api, repoId } from "./api.ts";
 import { usePersisted } from "./hooks.ts";
 import { plural } from "./util.ts";
 
 interface Props {
   repoName: string;
+  scope: Scope;
   files: ReviewedFile[];
   allPaths: string[] | null;
   selected: string | null;
@@ -54,6 +58,7 @@ function statText(f: ReviewedFile): string {
 
 /** Everything a node shows besides its name, so measuring and drawing agree. */
 function dirMeta(files: ReviewedFile[]) {
+  if (!files.length) return "";
   const d = done(files);
   return d === files.length ? `✓ ${files.length}` : `${d}/${files.length}`;
 }
@@ -73,8 +78,62 @@ function measure(node: GraphNode, threads: Map<string, number>, news: Map<string
       return w + 14;
     }
     case "unchanged":
+    case "ghost":
       return 22 + textWidth(node.name, `italic ${FONT}`);
   }
+}
+
+interface Link {
+  id: string;
+  d: string;
+  right: number;
+  fromPath: string;
+  toPath: string;
+  fromLabel: string;
+  toLabel: string;
+}
+
+/**
+ * Import links drawn as arcs off the right end of each label, so they stay clear of
+ * the folder branches. A file inside a collapsed folder links from that folder.
+ */
+function placeLinks(nodes: Placed[], deps: Deps): Link[] {
+  const byPath = new Map<string, Placed>();
+  const dirs = new Map<string, Placed>();
+  for (const n of nodes) {
+    if (n.node.kind === "file" || n.node.kind === "ghost") byPath.set(n.node.path, n);
+    else if (n.node.kind === "dir") dirs.set(n.node.path, n);
+  }
+  const visible = (path: string): Placed | null => {
+    if (byPath.has(path)) return byPath.get(path)!;
+    const parts = path.split("/");
+    for (let i = parts.length - 1; i > 0; i--) {
+      const d = dirs.get(parts.slice(0, i).join("/"));
+      if (d) return d.node.kind === "dir" && d.node.collapsed ? d : null;
+    }
+    return null;
+  };
+  const out = new Map<string, Link>();
+  for (const e of deps.edges) {
+    const a = visible(e.from);
+    const b = visible(e.to);
+    if (!a || !b || a === b) continue;
+    const id = `${a.node.id}>${b.node.id}`;
+    if (out.has(id)) continue;
+    const sx = a.x + a.width + 4;
+    const tx = b.x + b.width + 6;
+    const cx = Math.max(sx, tx) + 26 + Math.abs(b.y - a.y) * 0.3;
+    out.set(id, {
+      id,
+      d: `M${sx},${a.y} C${cx},${a.y} ${cx},${b.y} ${tx},${b.y}`,
+      right: cx,
+      fromPath: e.from,
+      toPath: e.to,
+      fromLabel: e.from,
+      toLabel: e.to,
+    });
+  }
+  return [...out.values()];
 }
 
 /** With many files, open on the folder level: fold folders that hold more than a handful. */
@@ -96,10 +155,32 @@ export function MapView(props: Props) {
   const [zoom, setZoom] = usePersisted("mapZoom", 1);
   const collapsed = useMemo(() => new Set(collapsedList), [collapsedList]);
   const entries = useMemo(() => (allPaths ? entriesByDir(allPaths) : null), [allPaths]);
+  const [showLinks, setShowLinks] = usePersisted("mapLinks", true);
+  const [deps, setDeps] = useState<Deps | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  // Imports move with the files; refetch (debounced) whenever the change does.
+  const filesKey = files.map((f) => `${f.path}:${f.mtime}`).join("|");
+  useEffect(() => {
+    if (!showLinks) return;
+    let live = true;
+    const t = setTimeout(() => {
+      api<Deps>(`/api/repos/${repoId}/deps?scope=${props.scope}`).then((d) => live && setDeps(d), () => {});
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [filesKey, showLinks, props.scope]);
+
+  const ghosts = showLinks && deps ? deps.dependents : [];
   const layout = useMemo(
-    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news)),
-    [files, entries, collapsed, props.threadCounts, props.repoName, props.news],
+    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news), ghosts),
+    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts],
   );
+  const links = useMemo(() => (showLinks && deps ? placeLinks(layout.nodes, deps) : []), [layout, deps, showLinks]);
+  const width = Math.max(layout.width, ...links.map((l) => l.right + 24));
+  const focus = hovered ?? selected;
   const scroller = useRef<HTMLDivElement>(null);
 
   const maxWeight = Math.max(1, ...layout.nodes.filter((n) => n.node.kind === "file" || n.node.kind === "dir").map((n) => n.weight));
@@ -145,6 +226,9 @@ export function MapView(props: Props) {
   return (
     <div class="map">
       <div class="map-tools">
+        <button class={`btn small ${showLinks ? "on" : ""}`} onClick={() => setShowLinks(!showLinks)} title="Show which changed files import each other, and unchanged files that use them">
+          Imports
+        </button>
         <button class={`btn small ${foldersOnly ? "on" : ""}`} onClick={() => setCollapsedList(foldersOnly ? [] : leafDirs())} title="Hide files and show just which folders changed">
           {foldersOnly ? "Show files" : "Folders only"}
         </button>
@@ -156,7 +240,24 @@ export function MapView(props: Props) {
         </span>
       </div>
       <div class="map-scroll" ref={scroller}>
-        <svg class="graph" width={layout.width * zoom} height={layout.height * zoom} viewBox={`0 0 ${layout.width} ${layout.height}`} role="tree" aria-label="Changed files as a map">
+        <svg
+          class={`graph ${hovered ? "hovering" : ""}`}
+          width={width * zoom}
+          height={layout.height * zoom}
+          viewBox={`0 0 ${width} ${layout.height}`}
+          role="tree"
+          aria-label="Changed files as a map"
+          onMouseOver={(e) => setHovered((e.target as Element).closest?.("[data-path]")?.getAttribute("data-path") ?? null)}
+          onMouseLeave={() => setHovered(null)}
+        >
+          <defs>
+            <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" class="arrow" />
+            </marker>
+            <marker id="arrow-hot" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" class="arrow hot" />
+            </marker>
+          </defs>
           <g class="edges">
             {layout.nodes.map((n) => {
               if (!n.parent) return null;
@@ -177,6 +278,18 @@ export function MapView(props: Props) {
               );
             })}
           </g>
+          <g class="links">
+            {links.map((l) => {
+              const hot = !!focus && (l.fromPath === focus || l.toPath === focus);
+              return (
+                <path key={l.id} class={`link ${hot ? "hot" : ""}`} d={l.d} marker-end={`url(#${hot ? "arrow-hot" : "arrow"})`}>
+                  <title>
+                    {l.fromLabel} imports {l.toLabel}
+                  </title>
+                </path>
+              );
+            })}
+          </g>
           {layout.nodes.map((n) => (
             <Node key={n.node.id} placed={n} {...props} onPath={onPath.has(n)} onToggle={toggleDir} />
           ))}
@@ -190,6 +303,8 @@ export function MapView(props: Props) {
         <span><i class="ld done" />reviewed</span>
         <span><i class="ld again" />edited again</span>
         <span><i class="ld pie" />part of the file changed</span>
+        {showLinks && <span><i class="ld link-sample" />imports: hover a file to see what it uses and what uses it</span>}
+        {showLinks && <span><i class="ld ghost" />unchanged, but uses a changed file</span>}
         <span class="muted">thicker line = more changed · click a dot to mark reviewed · click a name to open it</span>
         <span class="muted"><kbd>j</kbd> <kbd>k</kbd> select · <kbd>enter</kbd> open · <kbd>space</kbd> reviewed · <kbd>g</kbd> files</span>
       </div>
@@ -209,7 +324,7 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
     const nameW = textWidth(n.name, n.kind === "root" ? `700 15px ${FONT.slice(5)}` : BOLD);
     return (
       <g
-        class={`gnode ${n.kind} ${all ? "all-done" : ""} ${props.onPath ? "hot" : ""} ${n.kind === "dir" && n.collapsed ? "collapsed" : ""}`}
+        class={`gnode ${n.kind} ${n.files.length === 0 ? "context" : all ? "all-done" : ""} ${props.onPath ? "hot" : ""} ${n.kind === "dir" && n.collapsed ? "collapsed" : ""}`}
         onClick={() => n.kind === "dir" && props.onToggle(n.path)}
         role="treeitem"
         aria-expanded={n.kind === "dir" ? !n.collapsed : true}
@@ -220,7 +335,7 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
         </title>
         <rect x={p.x} y={top} width={p.width} height={24} rx={12} />
         {/* Review progress along the bottom of the pill. */}
-        <rect class="pill-progress" x={p.x + 10} y={top + 20} width={Math.max(0, (p.width - 20) * (d / n.files.length))} height={2} rx={1} />
+        <rect class="pill-progress" x={p.x + 10} y={top + 20} width={n.files.length ? Math.max(0, (p.width - 20) * (d / n.files.length)) : 0} height={2} rx={1} />
         <text x={p.x + 13} y={p.y + 4.5} class="pill-name">
           {n.name}
         </text>
@@ -251,6 +366,18 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
     );
   }
 
+  if (n.kind === "ghost") {
+    return (
+      <g class="gnode ghost" data-path={n.path}>
+        <title>{n.path}{"\n"}Not changed, but it imports a file that was. Hover to see which.</title>
+        <circle cx={p.x + 7} cy={p.y} r={5} />
+        <text x={p.x + 22} y={p.y + 4.5}>
+          {n.name}
+        </text>
+      </g>
+    );
+  }
+
   const f = n.file;
   const selected = props.selected === f.path;
   const seen = props.recent.get(f.path) ?? 0;
@@ -266,6 +393,7 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
     <g
       key={seen}
       class={`gnode file s-${f.status} ${f.review ? `r-${f.review}` : ""} ${selected ? "selected" : ""} ${seen && Date.now() - seen < 3000 ? "flash" : ""}`}
+      data-path={f.path}
       role="treeitem"
       aria-selected={selected}
       onClick={() => props.onOpen(f.path)}

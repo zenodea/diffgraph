@@ -1,6 +1,7 @@
 // Every HTTP endpoint the page uses. Logic lives in the modules imported here.
 import { deleteThread, getThreads, reply, startThread } from "./ask.ts";
 import { getChanges, parseScope } from "./changes.ts";
+import { dependencies } from "./deps.ts";
 import { fileDiff, sendImage } from "./fileDiff.ts";
 import { loadConfig } from "./env.ts";
 import { allFiles, repoState } from "./git.ts";
@@ -70,4 +71,10 @@ route("POST", "/api/repos/:id/threads/:tid", async ({ params, body }) => {
 route("DELETE", "/api/repos/:id/threads/:tid", ({ params }) => {
   deleteThread(repoOr404(params.id), params.tid);
   return { ok: true };
+});
+
+route("GET", "/api/repos/:id/deps", async ({ params, url }) => {
+  const repo = repoOr404(params.id);
+  const changes = await getChanges(repo, parseScope(url.searchParams.get("scope")));
+  return dependencies(repo.root, changes.files.map((f) => f.path));
 });

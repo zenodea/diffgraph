@@ -273,6 +273,7 @@ function App() {
       {view === "map" ? (
         <MapView
           repoName={repo.name}
+          scope={scope}
           files={files}
           allPaths={allPaths}
           selected={selected}
