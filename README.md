@@ -87,6 +87,7 @@ already reviewed, it's flagged as "edited again".
 | --- | --- |
 | `g` | map ⇄ files |
 | `j` `k` · `Enter` | select · open |
+| `h` `l` | on the map: fold the folder you're in · unfold the one you're on |
 | `+` `−` `0` | zoom in, out, fit |
 | `1` `2` `3` | unified, split, full file |
 | `a` | ask about the selection |

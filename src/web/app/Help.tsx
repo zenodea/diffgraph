@@ -42,12 +42,13 @@ export function Help({ reviewMode }: { reviewMode: boolean }) {
           <div class="keys">
             <span><kbd>g</kbd></span><span>map ⇄ files</span>
             <span><kbd>j</kbd> <kbd>k</kbd> · <kbd>enter</kbd></span><span>select · open</span>
+            <span><kbd>h</kbd> <kbd>l</kbd></span><span>fold · unfold a folder (map)</span>
             <span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></span><span>unified, split, full file</span>
             <span><kbd>a</kbd></span><span>ask about the selection</span>
             <span><kbd>r</kbd></span><span>review mode</span>
             {reviewMode && (
               <>
-                <span><kbd>space</kbd> · <kbd>n</kbd> · <kbd>h</kbd></span><span>reviewed · next · hide reviewed</span>
+                <span><kbd>space</kbd> · <kbd>n</kbd> · <kbd>h</kbd></span><span>reviewed · next · hide reviewed (file list)</span>
               </>
             )}
           </div>

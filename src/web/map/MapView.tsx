@@ -20,6 +20,7 @@ interface Props {
   threadCounts: Map<string, number>;
   news: Map<string, "new" | "updated">;
   onOpen: (path: string) => void;
+  onSelect: (path: string) => void;
   onReview: (files: ReviewedFile[], reviewed: boolean) => void;
   reviewMode: boolean;
   onClearNews: () => void;
@@ -319,8 +320,49 @@ export function MapView(props: Props) {
     if (n && placed.current) pz.reveal(n.x - 8, n.y - 14, n.width + 16);
   }, [selected]);
 
+  // Keyboard travel follows what's on screen: visible files, and folded folders as
+  // single stops. l/Enter unfolds a folder, h folds the one you're in.
+  const [focusDir, setFocusDir] = useState<string | null>(null);
+  const [enterDir, setEnterDir] = useState<string | null>(null);
+  const stops = layout.nodes.filter((n) => n.node.kind === "file" || (n.node.kind === "dir" && n.node.collapsed));
+  const pathOf = (n: Placed) => (n.node.kind === "file" || n.node.kind === "dir" ? n.node.path : "");
+  const go = (n: Placed) => {
+    if (n.node.kind === "dir") setFocusDir(n.node.path);
+    else {
+      setFocusDir(null);
+      props.onSelect(pathOf(n));
+    }
+    pz.reveal(n.x - 8, n.y - 14, n.width + 16);
+  };
+  useEffect(() => setFocusDir((d) => (d && nodeAt((n) => n.node.kind === "dir" && n.node.path === d) ? d : null)), [layout]);
+  useEffect(() => {
+    if (selected && focusDir && !selected.startsWith(focusDir + "/")) setFocusDir(null);
+  }, [selected]);
+  // After unfolding with the keyboard, land on the first thing inside.
+  useEffect(() => {
+    if (!enterDir) return;
+    const first = stops.find((n) => pathOf(n).startsWith(enterDir + "/"));
+    setEnterDir(null);
+    if (first) go(first);
+  }, [layout]);
+  const fold = (dir: Placed | null) => {
+    if (!dir || dir.node.kind !== "dir") return;
+    if (!dir.node.collapsed) setCollapsedList([...collapsedList, dir.node.path]);
+    setFocusDir(dir.node.path);
+  };
+
   useKeys((e) => {
-    if (e.key === "=" || e.key === "+") pz.zoomBy(1.2);
+    const i = focusDir !== null ? stops.findIndex((n) => n.node.kind === "dir" && n.node.path === focusDir) : stops.findIndex((n) => n.node.kind === "file" && n.node.path === selected);
+    const cur = stops[i];
+    if (e.key === "j" || e.key === "k") {
+      const next = i === -1 ? stops[0] : stops[i + (e.key === "j" ? 1 : -1)];
+      if (next) go(next);
+    } else if ((e.key === "l" || e.key === "Enter") && cur?.node.kind === "dir") {
+      setEnterDir(cur.node.path);
+      toggleDir(cur.node.path);
+    } else if (e.key === "Enter" && cur?.node.kind === "file") props.onOpen(cur.node.path);
+    else if (e.key === "h" && cur) fold(cur.parent);
+    else if (e.key === "=" || e.key === "+") pz.zoomBy(1.2);
     else if (e.key === "-") pz.zoomBy(1 / 1.2);
     else if (e.key === "0") pz.fit(width, layout.height);
     else return;
@@ -457,7 +499,15 @@ export function MapView(props: Props) {
             })}
           </g>
           {layout.nodes.map((n) => (
-            <Node key={n.node.id} placed={n} {...props} onPath={onPath.has(n)} onToggle={toggleDir} />
+            <Node
+              key={n.node.id}
+              placed={n}
+              {...props}
+              selected={focusDir !== null ? null : selected}
+              focused={n.node.kind === "dir" && n.node.path === focusDir}
+              onPath={onPath.has(n)}
+              onToggle={toggleDir}
+            />
           ))}
           </g>
         </svg>
@@ -483,7 +533,7 @@ export function MapView(props: Props) {
   );
 }
 
-type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void };
+type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void; focused?: boolean };
 
 /**
  * Positions a node with a CSS transform so it glides when the layout reflows (a new
@@ -510,7 +560,7 @@ function NodeBody(props: NodeProps) {
     const nameW = textWidth(n.name, n.kind === "root" ? `700 15px ${FONT.slice(5)}` : BOLD);
     return (
       <g
-        class={`gnode ${n.kind} ${n.files.length === 0 ? "context" : all && props.reviewMode ? "all-done" : ""} ${props.onPath ? "hot" : ""} ${n.kind === "dir" && n.collapsed ? "collapsed" : ""}`}
+        class={`gnode ${n.kind} ${props.focused ? "focused" : ""} ${n.files.length === 0 ? "context" : all && props.reviewMode ? "all-done" : ""} ${props.onPath ? "hot" : ""} ${n.kind === "dir" && n.collapsed ? "collapsed" : ""}`}
         onClick={() => n.kind === "dir" && props.onToggle(n.path)}
         data-dir={n.kind === "dir" ? n.path : ""}
         role="treeitem"

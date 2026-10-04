@@ -191,7 +191,7 @@ export function App() {
     if (e.key === "g") {
       if (view === "map" && !cur) (nextUnreviewed(null) ?? order[0]) && open((nextUnreviewed(null) ?? order[0]).path);
       else setView(view === "map" ? "diff" : "map");
-    } else if (e.key === "Enter" && view === "map" && cur) setView("diff");
+    } else if (view === "map" && ["j", "k", "h", "l", "Enter"].includes(e.key)) return; // the map moves through what it shows
     else if (e.key === "j") order[i + 1] && setSelected(order[i + 1].path);
     else if (e.key === "k") order[i - 1] && setSelected(order[i - 1].path);
     else if (e.key === "n") {
@@ -289,6 +289,7 @@ export function App() {
           threadCounts={threadCounts}
           news={news.files}
           onOpen={open}
+          onSelect={setSelected}
           onReview={(fs, r) => review(fs, r)}
           reviewMode={reviewMode}
           onClearNews={() => news.ack()}

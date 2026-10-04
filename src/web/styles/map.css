@@ -127,3 +127,4 @@
 .news-pip { fill: var(--accent); }
 
 .block-bg { fill: color-mix(in srgb, var(--text) 3%, transparent); stroke: color-mix(in srgb, var(--text) 5%, transparent); }
+.gnode.dir.focused rect:first-of-type { stroke: var(--accent); stroke-width: 2; fill: var(--accent-soft); }
