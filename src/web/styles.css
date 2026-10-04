@@ -1,0 +1,82 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f6f3;
+  --panel: #ffffff;
+  --panel-2: #f0f0ec;
+  --text: #1d1d1b;
+  --muted: #6c6c66;
+  --faint: #a3a39c;
+  --border: #e3e2dc;
+  --accent: #4f6bed;
+  --accent-soft: #e6eafd;
+  --add: #1a7f37;
+  --add-bg: #e7f6ea;
+  --add-strong: #c3ecca;
+  --del: #c4302b;
+  --del-bg: #fcebea;
+  --del-strong: #f6c9c6;
+  --mod: #2f6fd0;
+  --ren: #8250df;
+  --done: #1a7f37;
+  --warn: #b25e09;
+  --warn-bg: #fff3e0;
+  --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #131312;
+    --panel: #1b1b1a;
+    --panel-2: #232322;
+    --text: #ecebe6;
+    --muted: #9a9a93;
+    --faint: #63635e;
+    --border: #2e2e2c;
+    --accent: #8197ff;
+    --accent-soft: #252c4a;
+    --add: #57c06c;
+    --add-bg: #15291a;
+    --add-strong: #1f4a29;
+    --del: #f0726b;
+    --del-bg: #331817;
+    --del-strong: #5a2522;
+    --mod: #6aa1f2;
+    --ren: #b394f5;
+    --done: #57c06c;
+    --warn: #f0a75a;
+    --warn-bg: #33240f;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+#app { height: 100%; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.repo { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.repo-name { font-weight: 650; font-size: 15px; }
+
+.empty { flex: 1; display: grid; place-items: center; color: var(--muted); }
+
+.notice { max-width: 520px; margin: 18vh auto; padding: 0 16px; text-align: center; }
+.notice h1 { font-size: 20px; font-weight: 650; margin: 0 0 8px; }
+.notice p { color: var(--muted); margin: 0; }

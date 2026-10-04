@@ -1,0 +1,25 @@
+# graphdiff: review what your agent changed, as a tree, in the browser.
+# prefix+g (see README) runs "open" for the focused pane's repo.
+id = "graphdiff"
+name = "graphdiff"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Review what your agent changed: a live tree of the diff in your browser"
+platforms = ["linux", "macos"]
+
+[[build]]
+command = ["npm", "ci", "--no-audit", "--no-fund"]
+
+[[build]]
+command = ["npm", "run", "build"]
+
+# Starts the server if needed, then opens the page for the focused pane's repo.
+[[actions]]
+id = "open"
+title = "graphdiff: review changes"
+command = ["node", "src/cli.ts", "open"]
+
+[[actions]]
+id = "stop"
+title = "graphdiff: stop the server"
+command = ["node", "src/cli.ts", "stop"]
