@@ -413,6 +413,8 @@ export function MapView(props: Props) {
                   key={n.node.id}
                   class={`edge ${unchanged ? "faint" : ""} ${allDone ? "done" : ""} ${onPath.has(n) ? "hot" : ""}`}
                   d={`M${x1},${p.y} C${mid},${p.y} ${mid},${n.y} ${x2},${n.y}`}
+                  // As a CSS property too, so browsers that can animate it glide with the nodes.
+                  style={{ d: `path("M${x1},${p.y} C${mid},${p.y} ${mid},${n.y} ${x2},${n.y}")` }}
                   stroke-width={unchanged ? 1 : 1.5 + 5 * Math.sqrt(n.weight / maxWeight)}
                 />
               );
@@ -422,7 +424,7 @@ export function MapView(props: Props) {
             {links.map((l) => {
               const hot = !!focus && (l.fromPath === focus || l.toPath === focus);
               return (
-                <path key={l.id} class={`dep-link ${hot ? "hot" : ""}`} d={l.d} marker-end={`url(#${hot ? "arrow-hot" : "arrow"})`}>
+                <path key={l.id} class={`dep-link ${hot ? "hot" : ""}`} d={l.d} style={{ d: `path("${l.d}")` }} marker-end={`url(#${hot ? "arrow-hot" : "arrow"})`}>
                   <title>
                     {l.fromLabel} imports {l.toLabel}
                   </title>
@@ -457,7 +459,22 @@ export function MapView(props: Props) {
   );
 }
 
-function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void }) {
+type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void };
+
+/**
+ * Positions a node with a CSS transform so it glides when the layout reflows (a new
+ * file pushes the rest down) instead of jumping; the body draws at the origin.
+ */
+function Node(props: NodeProps) {
+  const p = props.placed;
+  return (
+    <g class="gpos" style={{ transform: `translate(${p.x}px, ${p.y}px)` }}>
+      <NodeBody {...props} placed={{ ...p, x: 0, y: 0 }} />
+    </g>
+  );
+}
+
+function NodeBody(props: NodeProps) {
   const { placed: p } = props;
   const n = p.node;
   const top = p.y - 12;

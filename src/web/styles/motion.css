@@ -1,0 +1,55 @@
+/* Small, quick motion: things arrive, move and settle instead of popping. All of it
+   switches off for people who ask their system for less motion. */
+
+:root {
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* Map: nodes fade in, branches draw themselves, and everything glides on reflow. */
+.gpos { transition: transform 0.38s var(--ease-out); }
+.gpos > .gnode { animation: node-in 0.42s var(--ease-out) both; transform-box: fill-box; transform-origin: left center; }
+@keyframes node-in { from { opacity: 0; transform: translateX(-6px) scale(0.96); } }
+.edge { transition: d 0.38s var(--ease-out), stroke 0.2s, stroke-width 0.2s; animation: edge-in 0.5s var(--ease-out) both; }
+.dep-link { transition: d 0.38s var(--ease-out), opacity 0.18s; }
+@keyframes edge-in { from { opacity: 0; } }
+.gnode.dir rect, .gnode.root rect { transition: stroke 0.2s, fill 0.2s; }
+.gnode.file .hit { transition: fill 0.15s; }
+.dot-fill, .dot-track { transition: fill 0.25s, stroke 0.2s, stroke-width 0.2s; }
+.dot-check { animation: tick-in 0.35s var(--ease-spring) both; transform-box: fill-box; transform-origin: center; }
+@keyframes tick-in { from { opacity: 0; transform: scale(0.4); } }
+.news-tag-svg, .again-tag { animation: fade-in 0.3s var(--ease-out) both; }
+
+/* Views and panes. */
+.map, .body { animation: fade-in 0.22s var(--ease-out) both; }
+.diff-scroll, .unplaced, .why-body { animation: rise-in 0.24s var(--ease-out) both; }
+.summary-panel { animation: slide-in-right 0.28s var(--ease-out) both; }
+.summary-item p { animation: fade-in 0.3s var(--ease-out) both; }
+.thread { animation: rise-in 0.28s var(--ease-out) both; }
+.msg.answer .md { animation: fade-in 0.25s var(--ease-out) both; }
+.help-pop { animation: pop-in 0.18s var(--ease-out) both; transform-origin: top right; }
+.toast { animation: toast-in 0.28s var(--ease-spring) both; }
+.banner { animation: fade-in 0.25s var(--ease-out) both; }
+
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(4px); } }
+@keyframes slide-in-right { from { opacity: 0; transform: translateX(12px); } }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.96) translateY(-4px); } }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } }
+
+/* Controls. */
+.btn, .segmented button, .row, .summary-item, .link, .back, .circle {
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+.btn:active:not(:disabled), .segmented button:active:not(:disabled) { transform: scale(0.97); }
+.circle.done { animation: tick-in 0.3s var(--ease-spring); }
+.chevron { transition: transform 0.18s var(--ease-out); }
+.progress .bar span { transition: width 0.45s var(--ease-out), background-color 0.3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
