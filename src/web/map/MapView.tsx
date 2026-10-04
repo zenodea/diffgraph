@@ -253,11 +253,16 @@ export function MapView(props: Props) {
   const maxWeight = Math.max(1, ...layout.nodes.filter((n) => n.node.kind === "file" || n.node.kind === "dir").map((n) => n.weight));
   // Highlight the branch leading to the selected file.
   const [hoveredDir, setHoveredDir] = useState<string | null>(null);
+  // A folded folder picked with the keyboard (null when a file is the selection).
+  const [focusDir, setFocusDir] = useState<string | null>(null);
   const onPath = new Set<Placed>();
+  const dirNode = (path: string) => layout.nodes.find((n) => (path === "" ? n.node.kind === "root" : n.node.kind === "dir" && n.node.path === path));
   const pathStart =
     hoveredDir !== null
-      ? layout.nodes.find((n) => (hoveredDir === "" ? n.node.kind === "root" : n.node.kind === "dir" && n.node.path === hoveredDir))
-      : layout.nodes.find((n) => n.node.kind === "file" && n.node.path === selected);
+      ? dirNode(hoveredDir)
+      : focusDir !== null
+        ? dirNode(focusDir)
+        : layout.nodes.find((n) => n.node.kind === "file" && n.node.path === selected);
   for (let p = pathStart ?? null; p; p = p.parent) onPath.add(p);
 
   // Folder summaries for the panel: one per folder on the map, plus "" for the whole change.
@@ -322,7 +327,6 @@ export function MapView(props: Props) {
 
   // Keyboard travel follows what's on screen: visible files, and folded folders as
   // single stops. l/Enter unfolds a folder, h folds the one you're in.
-  const [focusDir, setFocusDir] = useState<string | null>(null);
   const [enterDir, setEnterDir] = useState<string | null>(null);
   const stops = layout.nodes.filter((n) => n.node.kind === "file" || (n.node.kind === "dir" && n.node.collapsed));
   const pathOf = (n: Placed) => (n.node.kind === "file" || n.node.kind === "dir" ? n.node.path : "");
