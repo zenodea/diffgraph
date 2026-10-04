@@ -7,7 +7,7 @@ browser opens a live map of that repo's changes: which folders were touched, how
 and what depends on what. It's for getting a feel for a change before (or instead of)
 reading every line of it.
 
-[Website](https://zenodea.github.io/diffgraph/) · [GitHub](https://github.com/zenodea/diffgraph)
+[Website](https://dea.dev/diffgraph/) · [GitHub](https://github.com/zenodea/diffgraph)
 
 ![The map: folders branch out to the files that changed](docs/screenshots/map.png)
 
