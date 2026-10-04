@@ -7,6 +7,7 @@ import type { ReviewedFile } from "../server/review.ts";
 import { api, repoId, type Repo } from "./api.ts";
 import type { ViewMode } from "./DiffView.tsx";
 import { FilePane, type AskRequest } from "./FilePane.tsx";
+import { MapView } from "./MapView.tsx";
 import { readHashPath, useHashPath, useKeys, usePersisted } from "./hooks.ts";
 import { Check } from "./icons.tsx";
 import { useLive, useTick, type Live } from "./live.ts";
@@ -49,6 +50,8 @@ function App() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useHashPath();
   const [mode, setMode] = usePersisted<ViewMode>("mode", "unified");
+  // The map is home; a file in the URL (a reload, a link) goes straight to its diff.
+  const [view, setView] = useState<"map" | "diff">(() => (readHashPath() ? "diff" : "map"));
 
   const [recent, setRecent] = useState<Map<string, number>>(new Map());
 
@@ -80,8 +83,8 @@ function App() {
   }, []);
   useEffect(() => void (repo && load()), [repo, scope]);
   useEffect(() => {
-    if (showAll && !allPaths) api<{ paths: string[] }>(`/api/repos/${repoId}/files`).then((r) => setAllPaths(r.paths));
-  }, [showAll]);
+    if (showAll || view === "map") api<{ paths: string[] }>(`/api/repos/${repoId}/files`).then((r) => setAllPaths(r.paths));
+  }, [showAll, view]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 5000);
@@ -161,11 +164,20 @@ function App() {
     api(`/api/repos/${repoId}/threads/${t.id}`, { method: "DELETE" }).catch(() => {});
   };
 
+  const open = (path: string) => {
+    setSelected(path);
+    setView("diff");
+  };
+
   useKeys((e) => {
     // The hash updates synchronously, so fast repeats don't act on a stale selection.
     const i = order.findIndex((f) => f.path === readHashPath());
     const cur = byPath.get(readHashPath() ?? "");
-    if (e.key === "j") order[i + 1] && setSelected(order[i + 1].path);
+    if (e.key === "g") {
+      if (view === "map" && !cur) (nextUnreviewed(null) ?? order[0]) && open((nextUnreviewed(null) ?? order[0]).path);
+      else setView(view === "map" ? "diff" : "map");
+    } else if (e.key === "Enter" && view === "map" && cur) setView("diff");
+    else if (e.key === "j") order[i + 1] && setSelected(order[i + 1].path);
     else if (e.key === "k") order[i - 1] && setSelected(order[i - 1].path);
     else if (e.key === "n") {
       const next = nextUnreviewed();
@@ -179,7 +191,7 @@ function App() {
 
   useEffect(() => {
     document.querySelector(".row.selected")?.scrollIntoView({ block: "nearest" });
-  }, [selected]);
+  }, [selected, view]);
 
   if (error) return <Notice title="Can't open this repo" body={error} />;
   if (!repo || !changes) return <Notice title="Loading…" />;
@@ -197,6 +209,14 @@ function App() {
       <header class="topbar">
         <div class="repo">
           <span class="repo-name">{repo.name}</span>
+          <div class="segmented" role="tablist" aria-label="View">
+            <button role="tab" aria-selected={view === "map"} class={view === "map" ? "on" : ""} title="The shape of the change (g)" onClick={() => setView("map")}>
+              Map
+            </button>
+            <button role="tab" aria-selected={view === "diff"} class={view === "diff" ? "on" : ""} title="File list and diffs (g)" onClick={() => (current ? setView("diff") : order[0] && open((nextUnreviewed(null) ?? order[0]).path))}>
+              Files
+            </button>
+          </div>
           {changes.branch && (
             <span class="branch" title={changes.from}>
               {changes.branch}
@@ -225,9 +245,30 @@ function App() {
           <DiffStat file={totals} />
         </div>
         <LiveStatus live={live} />
-        {files.length > 0 && <Progress done={done} total={files.length} onNext={() => { const n = nextUnreviewed(); n && setSelected(n.path); }} />}
+        {files.length > 0 && <Progress done={done} total={files.length} onNext={() => { const n = nextUnreviewed(); n && open(n.path); }} />}
       </header>
 
+      {live.superseded && (
+        <div class="banner info">
+          <span>graphdiff opened this repo in a newer tab. You can close this one.</span>
+          <button class="link" onClick={live.dismissSuperseded}>
+            Keep using this tab
+          </button>
+        </div>
+      )}
+
+      {view === "map" ? (
+        <MapView
+          repoName={repo.name}
+          files={files}
+          allPaths={allPaths}
+          selected={selected}
+          recent={recent}
+          threadCounts={threadCounts}
+          onOpen={open}
+          onReview={(fs, r) => review(fs, r)}
+        />
+      ) : (
       <div class="body">
         <aside class="sidebar">
           <div class="sidebar-head">
@@ -251,17 +292,10 @@ function App() {
             <span><kbd>space</kbd> reviewed</span>
             <span><kbd>h</kbd> hide reviewed</span>
             <span><kbd>a</kbd> ask</span>
+            <span><kbd>g</kbd> map</span>
           </div>
         </aside>
         <main class="main">
-          {live.superseded && (
-            <div class="banner info">
-              <span>graphdiff opened this repo in a newer tab. You can close this one.</span>
-              <button class="link" onClick={live.dismissSuperseded}>
-                Keep using this tab
-              </button>
-            </div>
-          )}
           {current ? (
             <FilePane
               file={current}
@@ -274,12 +308,14 @@ function App() {
               onAsk={ask}
               onReply={replyTo}
               onDeleteThread={deleteThread}
+              onBack={() => setView("map")}
             />
           ) : (
             <Notice title="Nothing changed" body={scopes.find((s) => s.id === scope)!.hint(changes)} />
           )}
         </main>
       </div>
+      )}
       {toast && (
         <div class="toast" role="status" onClick={() => setToast(null)}>
           {toast}

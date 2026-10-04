@@ -38,6 +38,7 @@ interface Props {
   onAsk: (req: AskRequest) => Promise<void>;
   onReply: (thread: Thread, question: string, target: Target) => Promise<void>;
   onDeleteThread: (thread: Thread) => void;
+  onBack: () => void;
 }
 
 /** Turns selected diff lines into an anchor (new-side numbers when there are any) and their text. */
@@ -51,7 +52,7 @@ function selectionAnchor(lines: DiffLine[]): { anchor: Anchor; code: string } | 
   return { anchor, code: lines.map((l) => (l.t === " " ? " " : l.t) + l.s).join("\n") };
 }
 
-export function FilePane({ file, scope, mode, setMode, onReview, threads, agent, onAsk, onReply, onDeleteThread }: Props) {
+export function FilePane({ file, scope, mode, setMode, onReview, threads, agent, onAsk, onReply, onDeleteThread, onBack }: Props) {
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [onlySinceReview, setOnlySinceReview] = useState(false);
@@ -116,6 +117,9 @@ export function FilePane({ file, scope, mode, setMode, onReview, threads, agent,
   return (
     <>
       <div class="file-head">
+        <button class="back" onClick={onBack} title="Back to the map (g)">
+          ← Map
+        </button>
         <StatusBadge file={file} />
         <span class="file-path">
           <span class="muted">{dir}</span>

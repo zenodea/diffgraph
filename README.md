@@ -3,8 +3,13 @@
 A [herdr](https://herdr.dev) plugin for keeping track of what your coding agent changed.
 Press `prefix+g` in a pane and your browser opens a live review page for that pane's repo.
 
-- **A tree of what changed**, with the number left to review always in view. Folders show
-  how many of their files you've done.
+- **A map of the change.** The home view is a graph of the repo's folders branching out
+  to the files that changed, so you can see at a glance whether it was the backend, the
+  frontend, or both. Thicker branches changed more; untouched files fold into one grey
+  "n unchanged" node per folder. Coloured dots still need you; grey ones are reviewed.
+  Click a name to open its diff.
+- **A file list too**, with the number left to review always in view. Folders show how
+  many of their files you've done.
 - **Reviewed means reviewed.** Mark a file reviewed (space) and you move on to the next
   one. If the agent edits it again, it goes back to "edited again", and you can see just
   what changed since you last looked.
@@ -47,6 +52,8 @@ description = "graphdiff"
 
 | key | |
 | --- | --- |
+| `g` | switch between the map and the files |
+| `Enter` | open the selected file (on the map) |
 | `j` / `k` | next / previous file |
 | `n` | next file still to review |
 | `space` | mark reviewed and move on (again to undo) |

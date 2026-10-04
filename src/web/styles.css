@@ -10,6 +10,8 @@
   --accent: #4f6bed;
   --accent-soft: #e6eafd;
   --accent-fill: #4f6bed;
+  --edge: #c9c8c0;
+  --border-strong: #cfcec7;
   --add: #1a7f37;
   --add-bg: #e7f6ea;
   --add-strong: #c3ecca;
@@ -56,6 +58,8 @@
     --done: #57c06c;
     --warn: #f0a75a;
     --warn-bg: #33240f;
+    --edge: #45453f;
+    --border-strong: #46463f;
     --hl-keyword: #e48ac7;
     --hl-string: #8fd18f;
     --hl-comment: #75756e;
@@ -526,6 +530,101 @@ kbd {
 .md pre code { padding: 0; background: none; }
 
 .q-count { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* Map */
+.map { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.map-scroll { flex: 1; overflow: auto; }
+.map-tools {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 2;
+  display: flex;
+  gap: 10px;
+  padding: 4px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(6px);
+}
+.map-tools .zoom { display: inline-flex; gap: 2px; }
+.map-tools .btn.on { border-color: var(--accent); color: var(--accent); }
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--muted);
+}
+.map-legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.ld { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.ld.done { background: var(--faint); }
+.ld.again { border: 2px solid var(--warn); }
+.empty-map { display: grid; place-items: center; }
+
+.graph { display: block; font: 13px var(--font); }
+.edge { fill: none; stroke: var(--edge); stroke-linecap: round; transition: stroke 0.2s; }
+.edge.faint { stroke-dasharray: 3 4; stroke-width: 1; }
+.edge.done { stroke: color-mix(in srgb, var(--done) 55%, transparent); }
+.edge.hot { stroke: var(--accent); }
+
+.gnode { cursor: pointer; }
+.gnode.dir rect:first-of-type, .gnode.root rect:first-of-type { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1.2; }
+.gnode.root rect:first-of-type { fill: var(--text); stroke: none; }
+.gnode.root .pill-name { fill: var(--bg); font-weight: 700; font-size: 15px; }
+.gnode.root { cursor: default; }
+.gnode.dir:hover rect:first-of-type { stroke: var(--accent); }
+.gnode.dir.hot rect:first-of-type { stroke: var(--accent); stroke-width: 1.8; }
+.gnode.dir.collapsed rect:first-of-type { stroke-dasharray: 4 3; }
+.gnode.all-done rect:first-of-type { stroke: var(--done); }
+.pill-name { fill: var(--text); font-weight: 600; }
+.pill-meta { fill: var(--muted); font: 12px var(--mono); }
+.gnode.all-done .pill-meta { fill: var(--done); }
+.pill-progress { fill: var(--done); }
+.gnode.root .pill-progress { fill: var(--done); }
+
+.gnode.unchanged { cursor: default; }
+.gnode.unchanged circle { fill: none; stroke: var(--faint); stroke-width: 1.2; }
+.gnode.unchanged text { fill: var(--faint); font-style: italic; }
+
+.gnode.file .hit { fill: transparent; }
+.gnode.file:hover .hit { fill: var(--panel-2); }
+.gnode.file.selected .hit { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+.fname { fill: var(--text); }
+.fname.deleted { text-decoration: line-through; fill: var(--muted); }
+.fstat { font: 12px var(--mono); }
+.fstat .plus { fill: var(--add); }
+.fstat .minus { fill: var(--del); }
+.fstat .bin { fill: var(--muted); }
+.dot-hit { fill: transparent; }
+.dot-fill { stroke: var(--panel); stroke-width: 1.5; }
+.gnode.s-A .dot-fill { fill: var(--add); }
+.gnode.s-M .dot-fill, .gnode.s-T .dot-fill { fill: var(--mod); }
+.gnode.s-D .dot-fill { fill: var(--del); }
+.gnode.s-R .dot-fill, .gnode.s-C .dot-fill { fill: var(--ren); }
+.dot:hover .dot-fill { stroke: var(--done); stroke-width: 3; }
+/* Reviewed goes grey: colour on the map always means "still needs you". */
+.gnode.r-reviewed .dot-fill { fill: var(--faint); }
+.dot-check { fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.gnode.r-reviewed .fname, .gnode.r-reviewed .fstat { opacity: 0.45; }
+.gnode.r-changed .dot-fill { stroke: var(--warn); stroke-width: 3; }
+.again-tag rect { fill: var(--warn-bg); }
+.again-tag text { fill: var(--warn); font-size: 11px; font-weight: 600; }
+.qcount path { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linejoin: round; }
+.qcount text { fill: var(--accent); font-size: 12px; }
+.fresh-ring { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: 0.7; pointer-events: none; }
+.gnode.flash .hit { animation: flash-fill 2.4s ease-out; }
+@keyframes flash-fill { 0%, 30% { fill: color-mix(in srgb, var(--accent) 28%, transparent); } }
+
+.back { border: 0; background: none; padding: 2px 6px 2px 0; color: var(--accent); cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.back:hover { text-decoration: underline; }
+.repo .segmented { margin-left: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gnode.flash .hit { animation: none; }
+}
 
 .notice { max-width: 520px; margin: 18vh auto; padding: 0 16px; text-align: center; }
 .notice h1 { font-size: 20px; font-weight: 650; margin: 0 0 8px; }
