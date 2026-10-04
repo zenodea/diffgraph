@@ -67,7 +67,8 @@ to the change.
 ### Ask about it
 
 Click line numbers (shift-click for a range) and ask. Enter asks a read-only side agent
-and the answer appears right under those lines. `⌘Enter` sends the question to the agent
+(the same kind as the one in your pane: Claude Code, Codex or pi) and the answer appears
+right under those lines. `⌘Enter` sends the question to the agent
 in your herdr pane instead.
 
 ![An answer, anchored to the lines it's about](docs/screenshots/ask.png)
@@ -108,17 +109,19 @@ Optional, in `$(herdr plugin config-dir graphdiff)/config.json`:
 {
   "port": 4777,
   "base": "main",
-  "ask": { "command": ["codex", "exec", "--sandbox", "read-only", "-"], "format": "text" },
+  "ask": { "command": ["my-agent", "--read-only"], "format": "text" },
   "summary": { "enabled": true }
 }
 ```
 
 - `base`: the branch to compare against (detected when left out).
-- `ask.command`: what answers questions. It gets the prompt on stdin and runs in the repo.
-  The default is `claude -p` with read-only tools, streamed. Any command works with
-  `"format": "text"`.
-- `summary`: switch summaries off, or point them at another command the same way.
-  The default is Claude Haiku with no tools.
+- `ask.command`: what answers questions. Leave it out and graphdiff uses the same kind of
+  agent as the one in your herdr pane, run headless, read-only and without saving a
+  session: `claude -p` (Haiku for summaries), `codex exec` in a read-only sandbox, or
+  `pi -p` with read-only tools. If the pane's agent isn't one of those, it falls back to
+  whichever is installed. A custom command gets the prompt on stdin, runs in the repo, and
+  its stdout is the answer.
+- `summary`: switch summaries off with `"enabled": false`, or set `command` the same way.
 
 ## How it works
 

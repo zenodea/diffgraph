@@ -6,12 +6,13 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Changes } from "../git/changes.ts";
-import { loadConfig, stateDir, herdrBin } from "../core/env.ts";
+import { stateDir, herdrBin } from "../core/env.ts";
 import { diffFile } from "../git/fileDiff.ts";
 import { HttpError } from "../core/http.ts";
 import { broadcast } from "../core/live.ts";
 import { run } from "../core/proc.ts";
 import type { Repo } from "../core/repos.ts";
+import { agentCommand } from "./runner.ts";
 import { whyFor } from "./why.ts";
 
 export interface Anchor {
@@ -110,7 +111,7 @@ async function ask(repo: Repo, changes: Changes, thread: Thread, { question, tar
   thread.messages.push({ role: "you", text: question.trim(), at: Date.now(), status: "done" });
   if (target === "agent") return sendToAgent(repo, thread, question.trim());
   const prompt = await buildPrompt(repo, changes, thread, history, question.trim());
-  runSideAgent(repo, thread, prompt);
+  await runSideAgent(repo, thread, prompt);
 }
 
 function where(thread: Thread): string {
@@ -169,10 +170,15 @@ async function buildPrompt(repo: Repo, changes: Changes, thread: Thread, history
 
 const ASK_TIMEOUT_MS = 5 * 60_000;
 
-function runSideAgent(repo: Repo, thread: Thread, prompt: string) {
-  const { command, format } = loadConfig().ask;
-  const msg: Message = { role: "answer", text: "", at: Date.now(), status: "streaming", by: command[0] };
+async function runSideAgent(repo: Repo, thread: Thread, prompt: string) {
+  const agent = await agentCommand("ask", repo);
+  const msg: Message = { role: "answer", text: "", at: Date.now(), status: "streaming", by: agent?.label ?? "agent" };
   thread.messages.push(msg);
+  if (!agent) {
+    Object.assign(msg, { status: "error", text: "No agent to answer with: install Claude Code, Codex or pi, or set ask.command in the config." });
+    return publish(repo, thread);
+  }
+  const { command, format } = agent;
   publish(repo, thread);
 
   // Don't let a nested Claude Code think it's running inside the session that started us.

@@ -12,37 +12,24 @@ export const herdrBin = process.env.HERDR_BIN_PATH ?? "herdr";
 
 mkdirSync(stateDir, { recursive: true });
 
-export type AskFormat = "claude-stream-json" | "text";
+/** How a command's stdout is read: Claude's JSON stream / JSON result, or plain text. */
+export type OutputFormat = "claude-stream-json" | "claude-json" | "text";
 
 export interface Config {
   port: number;
   /** Branch to compare against; auto-detected when null. */
   base: string | null;
-  ask: { command: string[]; format: AskFormat };
-  /** One-line folder summaries on the map. `format` "claude-json" or "text". */
-  summary: { enabled: boolean; command: string[]; format: "claude-json" | "text" };
+  /** What answers questions. No command: the same kind of agent as the one in the pane. */
+  ask: { command: string[] | null; format: OutputFormat };
+  /** One-line folder summaries on the map; command works like `ask`. */
+  summary: { enabled: boolean; command: string[] | null; format: OutputFormat };
 }
 
 const defaults: Config = {
   port: 4777,
   base: null,
-  ask: {
-    command: [
-      "claude", "-p",
-      "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-      // Q&A runs shouldn't leave transcripts behind (they'd show up as "why" sessions).
-      "--no-session-persistence",
-      "--allowedTools", "Read,Grep,Glob",
-      "--disallowedTools", "Edit,Write,MultiEdit,NotebookEdit,Bash",
-    ],
-    format: "claude-stream-json",
-  },
-  summary: {
-    enabled: true,
-    // Small, fast, no tools: it only reads the diff we hand it.
-    command: ["claude", "-p", "--model", "haiku", "--output-format", "json", "--no-session-persistence", "--tools", ""],
-    format: "claude-json",
-  },
+  ask: { command: null, format: "text" },
+  summary: { enabled: true, command: null, format: "text" },
 };
 
 export function loadConfig(): Config {

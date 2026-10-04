@@ -12,6 +12,7 @@ import { loadConfig, stateDir } from "../core/env.ts";
 import { diffFile } from "../git/fileDiff.ts";
 import { broadcast } from "../core/live.ts";
 import type { Repo } from "../core/repos.ts";
+import { agentCommand } from "./runner.ts";
 import { whyFor } from "./why.ts";
 
 export interface Summary {
@@ -130,12 +131,15 @@ async function summarize(repo: Repo, changes: Changes, folder: string): Promise<
   ]
     .filter(Boolean)
     .join("\n\n");
-  const text = await runModel(repo.root, prompt);
+  const text = await runModel(repo, prompt);
   return text?.trim().replace(/^["']|["']$/g, "").split("\n")[0] || null;
 }
 
-function runModel(cwd: string, prompt: string): Promise<string | null> {
-  const { command, format } = loadConfig().summary;
+async function runModel(repo: Repo, prompt: string): Promise<string | null> {
+  const agent = await agentCommand("summary", repo);
+  if (!agent) return null;
+  const { command, format } = agent;
+  const cwd = repo.root;
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (k === "CLAUDECODE" || k.startsWith("CLAUDE_CODE_")) delete env[k];
   return new Promise((resolve) => {
