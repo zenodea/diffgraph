@@ -23,6 +23,8 @@ export interface Config {
   ask: { command: string[] | null; format: OutputFormat };
   /** One-line folder summaries on the map; command works like `ask`. */
   summary: { enabled: boolean; command: string[] | null; format: OutputFormat };
+  /** A herdr toast with the shape of the change when an agent finishes a turn. */
+  notify: boolean;
 }
 
 const defaults: Config = {
@@ -30,6 +32,7 @@ const defaults: Config = {
   base: null,
   ask: { command: null, format: "text" },
   summary: { enabled: true, command: null, format: "text" },
+  notify: true,
 };
 
 export function loadConfig(): Config {

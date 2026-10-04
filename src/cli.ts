@@ -2,6 +2,7 @@
 //   open   start the server if needed and open the focused pane's repo (herdr action)
 //   serve  run the server in the foreground
 //   stop   stop a running server
+//   notify herdr event hook: tell you the shape of what an agent just changed
 import { spawn } from "node:child_process";
 import { openSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -89,6 +90,11 @@ try {
     await startServer();
   } else if (command === "open") await open();
   else if (command === "stop") await stop();
+  else if (command === "notify") {
+    // Runs on every agent status change: never make noise when something's off.
+    const { notifyAgentDone } = await import("./server/notify.ts");
+    await notifyAgentDone(process.env.HERDR_PLUGIN_EVENT_JSON).catch((e) => console.error(e));
+  }
   else {
     console.error(`unknown command: ${command} (use open, serve or stop)`);
     process.exit(2);

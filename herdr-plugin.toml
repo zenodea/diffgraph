@@ -19,6 +19,11 @@ id = "open"
 title = "graphdiff: review changes"
 command = ["node", "src/cli.ts", "open"]
 
+# When an agent finishes a turn, a herdr notification says where it made changes.
+[[events]]
+on = "pane.agent_status_changed"
+command = ["node", "src/cli.ts", "notify"]
+
 [[actions]]
 id = "stop"
 title = "graphdiff: stop the server"
