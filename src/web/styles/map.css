@@ -126,15 +126,4 @@
 .news-tag-svg text { fill: #fff; font-size: 11px; font-weight: 600; }
 .news-pip { fill: var(--accent); }
 
-/* Zoomed far out: names fade, dots grow, folders stay. */
-.fname, .fstat, .qcount, .news-tag-svg, .again-tag, .gnode.ghost text { transition: opacity 0.25s; }
-.graph.far .fname, .graph.far .fstat, .graph.far .qcount, .graph.far .news-tag-svg, .graph.far .again-tag, .graph.far .gnode.ghost text { opacity: 0; }
-.dot { transform-box: fill-box; transform-origin: center; transition: transform 0.25s var(--ease-out, ease); }
-.graph.far .dot { transform: scale(1.7); }
 .block-bg { fill: color-mix(in srgb, var(--text) 3%, transparent); stroke: color-mix(in srgb, var(--text) 5%, transparent); }
-.gpos > .gnode.dir, .gpos > .gnode.root { transition: transform 0.25s; }
-.pill-rect { transition: width 0.25s; }
-.pill-untouched { transition: opacity 0.2s; }
-.graph.far .pill-rect { width: var(--far-w); }
-.graph.far .pill-untouched { opacity: 0; }
-.graph.far .gpos > .gnode.dir, .graph.far .gpos > .gnode.root { transform: scale(var(--label-scale)); }

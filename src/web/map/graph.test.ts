@@ -41,11 +41,11 @@ describe("layoutGraph", () => {
     const many = Array.from({ length: 12 }, (_, i) => file(`big/f${String(i).padStart(2, "0")}.ts`));
     const layout = layoutGraph("repo", many, null, new Set(), measure);
     const block = layout.blocks[0];
-    expect(blockColumns(12)).toBe(3);
-    expect(block.rows).toHaveLength(4);
+    expect(blockColumns(12)).toBe(2);
+    expect(block.rows).toHaveLength(6);
     const xs = [...new Set(block.items.map((it) => it.x))];
-    expect(xs).toHaveLength(3);
-    expect(block.items.filter((it) => it.x === xs[0]).map((it) => it.node.name)).toEqual(["f00.ts", "f01.ts", "f02.ts", "f03.ts"]);
+    expect(xs).toHaveLength(2);
+    expect(block.items.filter((it) => it.x === xs[0]).map((it) => it.node.name)).toEqual(["f00.ts", "f01.ts", "f02.ts", "f03.ts", "f04.ts", "f05.ts"]);
   });
 
   it("puts parents midway between their children and weights by lines changed", () => {

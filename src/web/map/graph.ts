@@ -54,17 +54,17 @@ interface Dir {
   ghosts: string[];
 }
 
-const ROW = 32;
-const COL_GAP = 56;
+const ROW = 36;
+const COL_GAP = 64;
 const PAD = 24;
 /** Gap between the connector's spine and the first column of files, and between columns. */
-const BLOCK_INSET = 16;
-const BLOCK_COL_GAP = 30;
+const BLOCK_INSET = 22;
+const BLOCK_COL_GAP = 48;
 /** Extra space after a block, so neighbouring folders' files don't run together. */
-const BLOCK_GAP = 14;
+const BLOCK_GAP = 28;
 
 /** Columns for a block of n files: tall lists turn into short, wider grids. */
-export const blockColumns = (n: number) => (n <= 4 ? 1 : n <= 10 ? 2 : n <= 21 ? 3 : 4);
+export const blockColumns = (n: number) => (n <= 6 ? 1 : n <= 16 ? 2 : 3);
 
 /** Direct children (file and dir names) of every folder in the repo listing. */
 export function entriesByDir(allPaths: string[]): Map<string, Set<string>> {

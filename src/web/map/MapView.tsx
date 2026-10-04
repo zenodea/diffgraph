@@ -375,10 +375,7 @@ export function MapView(props: Props) {
       </div>
       <div class={`map-scroll ${pz.dragging ? "dragging" : ""}`} ref={pz.ref}>
         <svg
-          // Zoomed far out, file names fade and dots grow: the shape is what's readable there.
-          class={`graph ${hovered ? "hovering" : ""} ${pz.view.k < 0.55 ? "far" : ""}`}
-          // Folder names grow as you zoom out, so the overview stays legible.
-          style={{ "--label-scale": String(Math.min(1.35, Math.max(1, 0.55 / pz.view.k))) }}
+          class={`graph ${hovered ? "hovering" : ""}`}
           width="100%"
           height="100%"
           role="tree"
@@ -435,12 +432,12 @@ export function MapView(props: Props) {
               return (
                 <g key={`b:${p.node.id}`} class={`comb ${allDone ? "done" : ""}`}>
                   {b.rows.length > 1 && (
-                    <rect class="block-bg" x={b.x + 6} y={b.rows[0] - 15} width={b.right - b.x + 4} height={b.rows[b.rows.length - 1] - b.rows[0] + 30} rx={10} />
+                    <rect class="block-bg" x={b.x + 6} y={b.rows[0] - 19} width={b.right - b.x + 10} height={b.rows[b.rows.length - 1] - b.rows[0] + 38} rx={12} />
                   )}
                   <path class={`edge ${hot ? "hot" : ""} ${allDone ? "done" : ""}`} d={branch} style={{ d: `path("${branch}")` }} stroke-width={width} />
                   {b.rows.length > 1 && <path class={`edge spine ${allDone ? "done" : ""}`} d={spine} style={{ d: `path("${spine}")` }} stroke-width={Math.min(width, 3)} />}
                   {b.rows.map((y) => {
-                    const tick = `M${b.x},${y} L${b.x + 12},${y}`;
+                    const tick = `M${b.x},${y} L${b.x + 16},${y}`;
                     return <path key={y} class={`edge tick ${hot && y === hotRow ? "hot" : ""} ${allDone ? "done" : ""}`} d={tick} style={{ d: `path("${tick}")` }} stroke-width={1.5} />;
                   })}
                 </g>
@@ -525,16 +522,7 @@ function NodeBody(props: NodeProps) {
           {props.reviewMode ? `, ${d} reviewed` : ""}
           {n.kind === "dir" ? `\nClick to ${n.collapsed ? "expand" : "collapse"}` : ""}
         </title>
-        {/* Zoomed far out the pill drops its "untouched" note and shrinks to fit (see .far). */}
-        <rect
-          class="pill-rect"
-          x={p.x}
-          y={top}
-          width={p.width}
-          height={24}
-          rx={12}
-          style={{ "--far-w": `${n.untouched ? p.width - (n.kind === "root" ? 10 : 8) - textWidth(untouchedText(n.untouched), UNTOUCHED) : p.width}px` }}
-        />
+        <rect x={p.x} y={top} width={p.width} height={24} rx={12} />
         {/* Review progress along the bottom of the pill. */}
         {props.reviewMode && <rect class="pill-progress" x={p.x + 10} y={top + 20} width={n.files.length ? Math.max(0, (p.width - 20) * (d / n.files.length)) : 0} height={2} rx={1} />}
         <text x={p.x + 13} y={p.y + 4.5} class="pill-name">
