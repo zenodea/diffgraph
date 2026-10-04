@@ -2,6 +2,7 @@
 import { deleteThread, getThreads, reply, startThread } from "./agents/ask.ts";
 import { getChanges, parseScope } from "./git/changes.ts";
 import { dependencies } from "./deps/deps.ts";
+import { risks } from "./deps/risks.ts";
 import { fileDiff, sendImage } from "./git/fileDiff.ts";
 import { loadConfig } from "./core/env.ts";
 import { allFiles, repoState } from "./git/git.ts";
@@ -93,4 +94,9 @@ route("GET", "/api/repos/:id/sources", async ({ params, url }) => {
   const repo = repoOr404(params.id);
   const changes = await getChanges(repo, parseScope(url.searchParams.get("scope")));
   return { sources: await sources(repo, changes, url.searchParams.get("by") === "agent" ? "agent" : "prompt") };
+});
+
+route("GET", "/api/repos/:id/risks", async ({ params, url }) => {
+  const repo = repoOr404(params.id);
+  return risks(repo, await getChanges(repo, parseScope(url.searchParams.get("scope"))));
 });

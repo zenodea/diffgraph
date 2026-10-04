@@ -4,6 +4,7 @@ import type { Scope } from "../../server/git/git.ts";
 import type { ReviewedFile } from "../../server/review/review.ts";
 import type { Summary } from "../../server/agents/summaries.ts";
 import type { Source } from "../../server/agents/sources.ts";
+import type { Risks } from "../../server/deps/risks.ts";
 import { changedShare } from "../../shared.ts";
 import { entriesByDir, layoutGraph, type GraphNode, type Placed } from "./graph.ts";
 import { api, repoId } from "../lib/api.ts";
@@ -77,10 +78,15 @@ function dirMeta(files: ReviewedFile[], reviewMode: boolean) {
   return d === files.length ? `✓ ${files.length}` : `${d}/${files.length}`;
 }
 
-function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>, reviewMode: boolean, pips: Map<string, string[]>): number {
+const RISK_W = 24;
+
+function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>, reviewMode: boolean, pips: Map<string, string[]>, risks: Risks | null): number {
   switch (node.kind) {
     case "root":
-      return textWidth(node.name, `700 15px ${FONT.slice(5)}`) + 28 + (node.untouched ? 10 + textWidth(untouchedText(node.untouched), UNTOUCHED) : 0);
+      return (
+        textWidth(node.name, `700 15px ${FONT.slice(5)}`) + 28 + (node.untouched ? 10 + textWidth(untouchedText(node.untouched), UNTOUCHED) : 0) +
+        (risks?.overall.length ? RISK_W : 0)
+      );
     case "dir":
       return (
         textWidth(node.name, BOLD) + 10 + textWidth(dirMeta(node.files, reviewMode), SMALL) + (node.collapsed ? 16 : 0) + 26 +
@@ -95,6 +101,7 @@ function measure(node: GraphNode, threads: Map<string, number>, news: Map<string
       if (threads.get(f.path)) w += 34;
       const p = pips.get(f.path)?.length ?? 0;
       if (p) w += p * PIP + 6;
+      if (risks?.files[f.path]) w += RISK_W;
       return w + 14;
     }
     case "ghost":
@@ -303,10 +310,26 @@ export function MapView(props: Props) {
   const lit = hoveredSrc ? new Set(hoveredSrc.files) : null;
   useEffect(() => setHoveredSource(null), [colourBy]);
 
+  // Risk hints: things worth a second look, when you ask for them.
+  const [showRisks, setShowRisks] = usePersisted("mapRisks", false);
+  const [risks, setRisks] = useState<Risks | null>(null);
+  useEffect(() => {
+    if (!showRisks) return setRisks(null);
+    let live = true;
+    const t = setTimeout(() => {
+      api<Risks>(`/api/repos/${repoId}/risks?scope=${props.scope}`).then((r) => live && setRisks(r), () => {});
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [filesKey, showRisks, props.scope]);
+  const riskCount = risks ? Object.keys(risks.files).length + risks.overall.length : 0;
+
   const ghosts = showLinks && deps ? deps.dependents : [];
   const layout = useMemo(
-    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news, props.reviewMode, pips), ghosts),
-    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts, props.reviewMode, pips],
+    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news, props.reviewMode, pips, risks), ghosts),
+    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts, props.reviewMode, pips, risks],
   );
   const links = useMemo(() => (showLinks && deps ? placeLinks(layout.nodes, deps) : []), [layout, deps, showLinks]);
   const width = Math.max(layout.width, ...links.map((l) => l.right + 24));
@@ -485,6 +508,9 @@ export function MapView(props: Props) {
         <button class={`btn small ${showSummary ? "on" : ""}`} onClick={() => { setShowSummary(!showSummary); if (!showSummary) setColourBy("off"); }} title="One-line summaries of what changed in each folder">
           Summary
         </button>
+        <button class={`btn small ${showRisks ? "on" : ""} ${showRisks && riskCount ? "warn" : ""}`} onClick={() => setShowRisks(!showRisks)} title="Flag things worth a second look: rewrites, big changes, broken imports, no tests">
+          Risks{showRisks && risks ? ` · ${riskCount}` : ""}
+        </button>
         <button class={`btn small ${showLinks ? "on" : ""}`} onClick={() => setShowLinks(!showLinks)} title="Show which changed files import each other, and unchanged files that use them">
           Imports
         </button>
@@ -585,6 +611,7 @@ export function MapView(props: Props) {
               selected={focusDir !== null ? null : selected}
               focused={n.node.kind === "dir" && n.node.path === focusDir}
               pips={n.node.kind === "file" ? pips.get(n.node.path) : undefined}
+              risk={n.node.kind === "file" ? risks?.files[n.node.path] : n.node.kind === "root" && risks?.overall.length ? risks.overall : undefined}
               lit={!lit || (n.node.kind === "file" ? lit.has(n.node.path) : n.node.kind === "dir" || n.node.kind === "root" ? n.node.files.some((f) => lit.has(f.path)) : false)}
               onPath={onPath.has(n)}
               onToggle={toggleDir}
@@ -617,7 +644,18 @@ export function MapView(props: Props) {
   );
 }
 
-type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void; focused?: boolean; pips?: string[]; lit?: boolean };
+type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void; focused?: boolean; pips?: string[]; lit?: boolean; risk?: string[] };
+
+/** A small warning triangle; the reasons show on hover. */
+function RiskMark({ x, y, reasons }: { x: number; y: number; reasons: string[] }) {
+  return (
+    <g class="risk" transform={`translate(${x}, ${y})`}>
+      <title>{reasons.join("\n")}</title>
+      <path d="M8 -7 L15.5 6.5 H0.5 Z" />
+      <path class="bang" d="M8 -2.5 V2 M8 4.3 V4.4" />
+    </g>
+  );
+}
 
 /**
  * Positions a node with a CSS transform so it glides when the layout reflows (a new
@@ -669,6 +707,7 @@ function NodeBody(props: NodeProps) {
             {n.untouched > 0 && <tspan class="pill-untouched" dx="8">{untouchedText(n.untouched)}</tspan>}
           </text>
         )}
+        {n.kind === "root" && props.risk && <RiskMark x={p.x + p.width - RISK_W + 2} y={p.y} reasons={props.risk} />}
         {n.kind === "root" && n.untouched > 0 && (
           <text x={p.x + 14 + nameW + 10} y={p.y + 4.5} class="pill-untouched">
             {untouchedText(n.untouched)}
@@ -786,6 +825,7 @@ function NodeBody(props: NodeProps) {
             </g>
           );
         })()}
+      {props.risk && <RiskMark x={extraX + (threads > 0 ? 34 : 0) + (props.pips?.length ? props.pips.length * PIP + 6 : 0)} y={p.y} reasons={props.risk} />}
       {props.pips && props.pips.length > 0 &&
         (() => {
           const x = extraX + (threads > 0 ? 34 : 0);

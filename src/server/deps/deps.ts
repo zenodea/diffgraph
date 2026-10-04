@@ -170,8 +170,14 @@ async function tsAliases(root: string): Promise<Resolver["aliases"]> {
   }
 }
 
-/** Import links among `changed` files, and the unchanged files that import them. */
+/** Import links among `changed` files, and the unchanged files that import them (capped, for the map). */
 export async function dependencies(root: string, changed: string[]): Promise<Deps> {
+  const { edges, dependents } = await importGraph(root, changed);
+  return { edges, dependents };
+}
+
+/** Like `dependencies`, plus every file importing each changed file (uncapped, for risk checks). */
+export async function importGraph(root: string, changed: string[]): Promise<Deps & { importers: Map<string, string[]> }> {
   const listing = (await allFiles(root)).filter((f) => SOURCE.test(f));
   const sources = listing.length > MAX_FILES ? [...new Set([...changed.filter((c) => SOURCE.test(c)), ...listing.slice(0, MAX_FILES)])] : listing;
   // Deleted files are gone from disk but can still be imported.
@@ -180,6 +186,7 @@ export async function dependencies(root: string, changed: string[]): Promise<Dep
 
   const edges: DepEdge[] = [];
   const dependentHits = new Map<string, string[]>();
+  const importers = new Map<string, string[]>();
   for (let i = 0; i < sources.length; i += 64) {
     await Promise.all(
       sources.slice(i, i + 64).map(async (from) => {
@@ -187,6 +194,7 @@ export async function dependencies(root: string, changed: string[]): Promise<Dep
         targets.delete(from);
         for (const to of targets) {
           if (!changedSet.has(to)) continue;
+          importers.set(to, [...(importers.get(to) ?? []), from]);
           if (changedSet.has(from)) edges.push({ from, to });
           else dependentHits.set(from, [...(dependentHits.get(from) ?? []), to]);
         }
@@ -207,5 +215,5 @@ export async function dependencies(root: string, changed: string[]): Promise<Dep
       edges.push({ from, to: t });
     }
   }
-  return { edges, dependents: dependents.sort() };
+  return { edges, dependents: dependents.sort(), importers };
 }

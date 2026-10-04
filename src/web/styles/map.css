@@ -140,3 +140,9 @@
 .summary-item.source p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .source-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+/* Risk hints */
+.risk path:first-of-type { fill: color-mix(in srgb, var(--warn) 22%, transparent); stroke: var(--warn); stroke-width: 1.4; stroke-linejoin: round; }
+.risk .bang { fill: none; stroke: var(--warn); stroke-width: 1.6; stroke-linecap: round; }
+.risk { animation: fade-in 0.3s ease both; }
+.map-tools .btn.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 60%, transparent); }
