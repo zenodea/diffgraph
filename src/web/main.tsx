@@ -8,7 +8,7 @@ import { api, repoId, type Repo } from "./api.ts";
 import type { ViewMode } from "./DiffView.tsx";
 import { FilePane, type AskRequest } from "./FilePane.tsx";
 import { MapView } from "./MapView.tsx";
-import { useNews, type News } from "./news.ts";
+import { useNews } from "./news.ts";
 import { readHashPath, useHashPath, useKeys, usePersisted } from "./hooks.ts";
 import { Check } from "./icons.tsx";
 import { useLive, useTick, type Live } from "./live.ts";
@@ -46,7 +46,10 @@ function App() {
   const [scope, setScope] = usePersisted<Scope>("scope", "branch");
   const [changes, setChanges] = useState<Reviewed | null>(null);
   const [showAll, setShowAll] = usePersisted("showAll", false);
-  const [hideReviewed, setHideReviewed] = usePersisted("hideReviewed", false);
+  const [hideReviewedPref, setHideReviewed] = usePersisted("hideReviewed", false);
+  // Off: just looking around. On: progress, ticks and "Mark reviewed" everywhere.
+  const [reviewMode, setReviewMode] = usePersisted("reviewMode", false);
+  const hideReviewed = reviewMode && hideReviewedPref;
   const [allPaths, setAllPaths] = useState<string[] | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useHashPath();
@@ -92,7 +95,11 @@ function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const files = changes?.files ?? [];
+  // Outside review mode the page shows no review state at all.
+  const files = useMemo(() => {
+    const all = changes?.files ?? [];
+    return reviewMode ? all : all.map((f) => (f.review ? { ...f, review: null, reviewedAt: null } : f));
+  }, [changes, reviewMode]);
   const byPath = useMemo(() => new Map(files.map((f) => [f.path, f])), [files]);
   const tree = useMemo(() => {
     let paths = showAll && allPaths ? [...new Set([...allPaths, ...byPath.keys()])] : [...byPath.keys()];
@@ -190,8 +197,9 @@ function App() {
     else if (e.key === "n") {
       const next = nextUnreviewed();
       next && setSelected(next.path);
-    } else if (e.key === " " && cur) review([cur], cur.review !== "reviewed", true);
-    else if (e.key === "h") setHideReviewed(!hideReviewed);
+    } else if (e.key === "r") setReviewMode(!reviewMode);
+    else if (e.key === " " && cur && reviewMode) review([cur], cur.review !== "reviewed", true);
+    else if (e.key === "h" && reviewMode) setHideReviewed(!hideReviewed);
     else if (e.key in modeKeys) setMode(modeKeys[e.key]);
     else return;
     e.preventDefault();
@@ -203,7 +211,7 @@ function App() {
 
   if (error) return <Notice title="Can't open this repo" body={error} />;
   if (!repo || !changes) return <Notice title="Loading…" />;
-  document.title = `${left ? `(${left}) ` : ""}${repo.name} · graphdiff`;
+  document.title = `${reviewMode && left ? `(${left}) ` : ""}${repo.name} · graphdiff`;
 
   const totals = files.reduce((t, f) => ({ added: t.added + f.added, deleted: t.deleted + f.deleted, binary: false }), { added: 0, deleted: 0, binary: false });
   const toggle = (path: string) => {
@@ -253,7 +261,11 @@ function App() {
           <DiffStat file={totals} />
         </div>
         <LiveStatus live={live} />
-        {files.length > 0 && <Progress done={done} total={files.length} onNext={() => { const n = nextUnreviewed(); n && open(n.path); }} />}
+        {reviewMode && files.length > 0 && <Progress done={done} total={files.length} onNext={() => { const n = nextUnreviewed(); n && open(n.path); }} />}
+        <button class={`btn review-toggle ${reviewMode ? "on" : ""}`} aria-pressed={reviewMode} onClick={() => setReviewMode(!reviewMode)} title="Review mode: tick files off as you go (r)">
+          <span class="toggle-track" aria-hidden="true"><span /></span>
+          Review
+        </button>
       </header>
 
       {live.superseded && (
@@ -264,11 +276,6 @@ function App() {
           </button>
         </div>
       )}
-
-      <NewsBanner news={news} onShow={() => {
-        const first = order.find((f) => news.files.has(f.path));
-        if (first) open(first.path);
-      }} />
 
       {view === "map" ? (
         <MapView
@@ -282,15 +289,19 @@ function App() {
           news={news.files}
           onOpen={open}
           onReview={(fs, r) => review(fs, r)}
+          reviewMode={reviewMode}
+          onClearNews={() => news.ack()}
         />
       ) : (
       <div class="body">
         <aside class="sidebar">
           <div class="sidebar-head">
-            <label class="switch" title="h">
-              <input type="checkbox" checked={hideReviewed} onChange={(e) => setHideReviewed(e.currentTarget.checked)} />
-              <span>Hide reviewed</span>
-            </label>
+            {reviewMode && (
+              <label class="switch" title="h">
+                <input type="checkbox" checked={hideReviewed} onChange={(e) => setHideReviewed(e.currentTarget.checked)} />
+                <span>Hide reviewed</span>
+              </label>
+            )}
             <label class="switch">
               <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.currentTarget.checked)} />
               <span>All files</span>
@@ -299,15 +310,20 @@ function App() {
           {files.length === 0 && !showAll ? (
             <div class="sidebar-empty">No changes in this scope.</div>
           ) : (
-            <Tree root={tree} selected={selected} collapsed={collapsed} onSelect={setSelected} onToggle={toggle} onReview={(fs, r) => review(fs, r)} hideReviewed={hideReviewed} recent={recent} threadCounts={threadCounts} news={news.files} />
+            <Tree root={tree} selected={selected} collapsed={collapsed} onSelect={setSelected} onToggle={toggle} onReview={(fs, r) => review(fs, r)} hideReviewed={hideReviewed} recent={recent} threadCounts={threadCounts} news={news.files} reviewMode={reviewMode} />
           )}
           <div class="keys-hint">
             <span><kbd>j</kbd> <kbd>k</kbd> move</span>
-            <span><kbd>n</kbd> next to review</span>
-            <span><kbd>space</kbd> reviewed</span>
-            <span><kbd>h</kbd> hide reviewed</span>
+            {reviewMode && (
+              <>
+                <span><kbd>n</kbd> next to review</span>
+                <span><kbd>space</kbd> reviewed</span>
+                <span><kbd>h</kbd> hide reviewed</span>
+              </>
+            )}
             <span><kbd>a</kbd> ask</span>
             <span><kbd>g</kbd> map</span>
+            <span><kbd>r</kbd> review mode</span>
           </div>
         </aside>
         <main class="main">
@@ -318,6 +334,7 @@ function App() {
               mode={mode}
               setMode={setMode}
               onReview={(r) => review([current], r, true)}
+              reviewMode={reviewMode}
               threads={threads.filter((t) => t.path === current.path)}
               agent={agentName}
               onAsk={ask}
@@ -336,30 +353,6 @@ function App() {
           {toast}
         </div>
       )}
-    </div>
-  );
-}
-
-function NewsBanner({ news, onShow }: { news: News; onShow: () => void }) {
-  const added = [...news.files.values()].filter((k) => k === "new").length;
-  const updated = news.files.size - added;
-  if (!news.files.size && !news.gone) return null;
-  const parts = [added && plural(added, "new file"), updated && `${updated} updated`, news.gone && `${news.gone} no longer changed`].filter(Boolean);
-  return (
-    <div class="banner news" role="status">
-      <span class="news-dot" aria-hidden="true" />
-      <span>
-        <b>Since you last looked:</b> {parts.join(" · ")}
-      </span>
-      {news.files.size > 0 && (
-        <button class="link" onClick={onShow}>
-          Show the first one
-        </button>
-      )}
-      <div class="spacer" />
-      <button class="btn small" onClick={() => news.ack()} title="Mark all of this as seen">
-        Got it
-      </button>
     </div>
   );
 }
@@ -385,7 +378,7 @@ function Progress({ done, total, onNext }: { done: number; total: number; onNext
   const all = done === total;
   return (
     <div class={`progress ${all ? "all" : ""}`}>
-      <div class="bar" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+      <div class="bar" title={`${done} of ${total} reviewed`} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
         <span style={{ width: `${(done / total) * 100}%` }} />
       </div>
       {all ? (
@@ -395,7 +388,8 @@ function Progress({ done, total, onNext }: { done: number; total: number; onNext
       ) : (
         <>
           <span class="progress-label">
-            <b>{total - done}</b> to review <span class="muted">· {done}/{total} done</span>
+            <b>{total - done}</b> left
+            <span class="muted">of {total}</span>
           </span>
           <button class="btn small" onClick={onNext} title="Next file to review (n)">
             Next <kbd>n</kbd>

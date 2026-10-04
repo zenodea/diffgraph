@@ -39,6 +39,7 @@ interface Props {
   onReply: (thread: Thread, question: string, target: Target) => Promise<void>;
   onDeleteThread: (thread: Thread) => void;
   onBack: () => void;
+  reviewMode: boolean;
 }
 
 /** Turns selected diff lines into an anchor (new-side numbers when there are any) and their text. */
@@ -52,7 +53,7 @@ function selectionAnchor(lines: DiffLine[]): { anchor: Anchor; code: string } | 
   return { anchor, code: lines.map((l) => (l.t === " " ? " " : l.t) + l.s).join("\n") };
 }
 
-export function FilePane({ file, scope, mode, setMode, onReview, threads, agent, onAsk, onReply, onDeleteThread, onBack }: Props) {
+export function FilePane({ file, scope, mode, setMode, onReview, threads, agent, onAsk, onReply, onDeleteThread, onBack, reviewMode }: Props) {
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [onlySinceReview, setOnlySinceReview] = useState(false);
@@ -135,7 +136,7 @@ export function FilePane({ file, scope, mode, setMode, onReview, threads, agent,
             </button>
           ))}
         </div>
-        <ReviewButton file={file} onReview={onReview} />
+        {reviewMode && <ReviewButton file={file} onReview={onReview} />}
       </div>
 
       {file.review === "changed" && (

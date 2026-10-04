@@ -6,11 +6,15 @@ Press `prefix+g` in a pane and your browser opens a live review page for that pa
 - **A map of the change.** The home view is a graph of the repo's folders branching out
   to the files that changed, so you can see at a glance whether it was the backend, the
   frontend, or both. Thicker branches changed more; untouched files fold into one grey
-  "n unchanged" node per folder. Coloured dots still need you; grey ones are reviewed.
-  Click a name to open its diff.
+  "n unchanged" node per folder. Each file's dot fills like a pie with how much of the
+  file changed. Hover a file to see what it imports and which files use it (unchanged
+  importers show up faded, so you can see how far a change could reach). Files that are
+  new or updated since you last looked get a small tag. Click a name to open its diff.
 - **A file list too**, with the number left to review always in view. Folders show how
   many of their files you've done.
-- **Reviewed means reviewed.** Mark a file reviewed (space) and you move on to the next
+- **Review mode, when you want it.** By default the page is just for looking around.
+  Switch on Review (`r`) to get a progress count, ticks on files and folders, and
+  "Mark reviewed". Reviewed means reviewed: mark a file (space) and you move on to the next
   one. If the agent edits it again, it goes back to "edited again", and you can see just
   what changed since you last looked.
 - **Three ways to read a diff:** unified, side by side, or the full file with changes
@@ -55,9 +59,10 @@ description = "graphdiff"
 | `g` | switch between the map and the files |
 | `Enter` | open the selected file (on the map) |
 | `j` / `k` | next / previous file |
-| `n` | next file still to review |
-| `space` | mark reviewed and move on (again to undo) |
-| `h` | hide reviewed files |
+| `r` | review mode on / off |
+| `n` | next file still to review (review mode) |
+| `space` | mark reviewed and move on, again to undo (review mode) |
+| `h` | hide reviewed files (review mode) |
 | `1` `2` `3` | unified / split / full file |
 | `a` | ask about the selected lines (or the file) |
 | `Esc` | clear the line selection |

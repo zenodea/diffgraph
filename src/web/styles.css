@@ -87,13 +87,14 @@ button { font: inherit; color: inherit; }
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 8px 16px;
   padding: 10px 16px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
-.repo { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.repo { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .repo-name { font-weight: 650; font-size: 15px; }
 .branch { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: var(--muted); }
@@ -108,6 +109,7 @@ button { font: inherit; color: inherit; }
   border-radius: 8px;
 }
 .segmented button {
+  white-space: nowrap;
   border: 0;
   background: none;
   padding: 3px 12px;
@@ -361,7 +363,7 @@ kbd {
 }
 
 .progress { display: flex; align-items: center; gap: 10px; }
-.progress .bar { width: 140px; height: 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
+.progress .bar { width: 110px; height: 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
 .progress .bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.3s ease; }
 .progress.all .bar span { background: var(--done); }
 .progress-label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -611,7 +613,7 @@ kbd {
 .gnode.s-R .dot-track, .gnode.s-C .dot-track { fill: color-mix(in srgb, var(--ren) 18%, var(--bg)); stroke: var(--ren); }
 .gnode.s-M .dot-slice, .gnode.s-T .dot-slice { fill: var(--mod); }
 .gnode.s-R .dot-slice, .gnode.s-C .dot-slice { fill: var(--ren); }
-.dot:hover .dot-fill, .dot:hover .dot-track { stroke: var(--done); stroke-width: 3; }
+.dot.clickable:hover .dot-fill, .dot.clickable:hover .dot-track { stroke: var(--done); stroke-width: 3; }
 .ld.pie { background: conic-gradient(var(--mod) 0 35%, color-mix(in srgb, var(--mod) 18%, var(--bg)) 35% 100%); border: 1.5px solid var(--mod); }
 /* Reviewed goes grey: colour on the map always means "still needs you". */
 .gnode.r-reviewed .dot-fill { fill: var(--faint); }
@@ -648,9 +650,17 @@ kbd {
 .ld.link-sample { width: 18px; height: 0; border-radius: 0; border-top: 2px solid var(--accent); }
 .ld.ghost { border: 1.3px dashed var(--muted); }
 
+/* Review mode switch */
+.review-toggle { gap: 8px; }
+.toggle-track { position: relative; width: 26px; height: 15px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border-strong); transition: background 0.15s; }
+.toggle-track span { position: absolute; top: 1.5px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transition: transform 0.15s, background 0.15s; }
+.review-toggle.on { border-color: var(--accent); color: var(--accent); }
+.review-toggle.on .toggle-track { background: var(--accent-fill); border-color: var(--accent-fill); }
+.review-toggle.on .toggle-track span { transform: translateX(10px); background: #fff; }
+.news-clear { color: var(--accent); }
+.news-pip-sm { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
 /* News since you last looked */
-.banner.news { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); border-bottom-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
-.news-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
 .news-tag { font-size: 11px; font-weight: 600; color: #fff; background: var(--accent-fill); padding: 1px 7px; border-radius: 999px; }
 .news-tag-svg rect { fill: var(--accent-fill); }
 .news-tag-svg text { fill: #fff; font-size: 11px; font-weight: 600; }

@@ -16,6 +16,7 @@ interface Props {
   recent: Map<string, number>;
   threadCounts: Map<string, number>;
   news: Map<string, "new" | "updated">;
+  reviewMode: boolean;
 }
 
 const FRESH_MS = 2 * 60_000;
@@ -52,7 +53,7 @@ function Node(props: Props & { node: TreeNode; depth: number }) {
         data-path={node.path}
         onClick={() => f && props.onSelect(node.path)}
       >
-        {f ? <ReviewCircle files={[f]} onReview={props.onReview} /> : <span class="circle-spacer" />}
+        {props.reviewMode && (f ? <ReviewCircle files={[f]} onReview={props.onReview} /> : <span class="circle-spacer" />)}
         {f ? <StatusBadge file={f} /> : <span class="badge-spacer" />}
         <span class="name" title={node.path}>
           {node.name}
@@ -78,14 +79,14 @@ function Node(props: Props & { node: TreeNode; depth: number }) {
   return (
     <>
       <div class={`row dir ${changed.length ? "changed" : "unchanged"} ${changed.length && done === changed.length ? "r-reviewed" : ""}`} style={pad} role="treeitem" aria-expanded={open} onClick={() => props.onToggle(node.path)}>
-        {changed.length ? <ReviewCircle files={changed} onReview={props.onReview} /> : <span class="circle-spacer" />}
+        {props.reviewMode && (changed.length ? <ReviewCircle files={changed} onReview={props.onReview} /> : <span class="circle-spacer" />)}
         <span class={`chevron ${open ? "open" : ""}`} aria-hidden="true">
           <svg viewBox="0 0 16 16" width="12" height="12"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </span>
         <span class="name">{node.name}</span>
         {changed.length > 0 && (
           <span class="dir-count" title={`${done} of ${changed.length} reviewed`}>
-            {props.hideReviewed ? `${changed.length - done} left` : `${done}/${changed.length}`}
+            {!props.reviewMode ? changed.length : props.hideReviewed ? `${changed.length - done} left` : `${done}/${changed.length}`}
           </span>
         )}
       </div>

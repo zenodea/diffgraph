@@ -19,6 +19,8 @@ interface Props {
   news: Map<string, "new" | "updated">;
   onOpen: (path: string) => void;
   onReview: (files: ReviewedFile[], reviewed: boolean) => void;
+  reviewMode: boolean;
+  onClearNews: () => void;
 }
 
 const FONT = '13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -57,18 +59,19 @@ function statText(f: ReviewedFile): string {
 }
 
 /** Everything a node shows besides its name, so measuring and drawing agree. */
-function dirMeta(files: ReviewedFile[]) {
+function dirMeta(files: ReviewedFile[], reviewMode: boolean) {
   if (!files.length) return "";
+  if (!reviewMode) return String(files.length);
   const d = done(files);
   return d === files.length ? `✓ ${files.length}` : `${d}/${files.length}`;
 }
 
-function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>): number {
+function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>, reviewMode: boolean): number {
   switch (node.kind) {
     case "root":
       return textWidth(node.name, `700 15px ${FONT.slice(5)}`) + 28;
     case "dir":
-      return textWidth(node.name, BOLD) + 10 + textWidth(dirMeta(node.files), SMALL) + (node.collapsed ? 16 : 0) + 26 + (node.files.some((f) => news.has(f.path)) ? 12 : 0);
+      return textWidth(node.name, BOLD) + 10 + textWidth(dirMeta(node.files, reviewMode), SMALL) + (node.collapsed ? 16 : 0) + 26 + (node.files.some((f) => news.has(f.path)) ? 12 : 0);
     case "file": {
       const f = node.file;
       let w = 22 + textWidth(node.name, FONT) + 10 + textWidth(statText(f), SMALL);
@@ -175,8 +178,8 @@ export function MapView(props: Props) {
 
   const ghosts = showLinks && deps ? deps.dependents : [];
   const layout = useMemo(
-    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news), ghosts),
-    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts],
+    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news, props.reviewMode), ghosts),
+    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts, props.reviewMode],
   );
   const links = useMemo(() => (showLinks && deps ? placeLinks(layout.nodes, deps) : []), [layout, deps, showLinks]);
   const width = Math.max(layout.width, ...links.map((l) => l.right + 24));
@@ -226,6 +229,12 @@ export function MapView(props: Props) {
   return (
     <div class="map">
       <div class="map-tools">
+        {props.news.size > 0 && (
+          <button class="btn small news-clear" onClick={props.onClearNews} title="Clear the new / updated tags">
+            <span class="news-pip-sm" aria-hidden="true" />
+            {props.news.size} new · clear
+          </button>
+        )}
         <button class={`btn small ${showLinks ? "on" : ""}`} onClick={() => setShowLinks(!showLinks)} title="Show which changed files import each other, and unchanged files that use them">
           Imports
         </button>
@@ -267,7 +276,7 @@ export function MapView(props: Props) {
               const mid = (x1 + x2) / 2;
               const unchanged = n.node.kind === "unchanged";
               const files = n.node.kind === "file" ? [n.node.file] : n.node.kind === "dir" ? n.node.files : [];
-              const allDone = files.length > 0 && done(files) === files.length;
+              const allDone = props.reviewMode && files.length > 0 && done(files) === files.length;
               return (
                 <path
                   key={n.node.id}
@@ -300,13 +309,13 @@ export function MapView(props: Props) {
         <span><i class="ld s-M" />modified</span>
         <span><i class="ld s-D" />deleted</span>
         <span><i class="ld s-R" />renamed</span>
-        <span><i class="ld done" />reviewed</span>
-        <span><i class="ld again" />edited again</span>
+        {props.reviewMode && <span><i class="ld done" />reviewed</span>}
+        {props.reviewMode && <span><i class="ld again" />edited again</span>}
         <span><i class="ld pie" />part of the file changed</span>
         {showLinks && <span><i class="ld link-sample" />imports: hover a file to see what it uses and what uses it</span>}
         {showLinks && <span><i class="ld ghost" />unchanged, but uses a changed file</span>}
-        <span class="muted">thicker line = more changed · click a dot to mark reviewed · click a name to open it</span>
-        <span class="muted"><kbd>j</kbd> <kbd>k</kbd> select · <kbd>enter</kbd> open · <kbd>space</kbd> reviewed · <kbd>g</kbd> files</span>
+        <span class="muted">thicker line = more changed{props.reviewMode ? " · click a dot to mark reviewed" : ""} · click a name to open it</span>
+        <span class="muted"><kbd>j</kbd> <kbd>k</kbd> select · <kbd>enter</kbd> open{props.reviewMode ? <> · <kbd>space</kbd> reviewed</> : null} · <kbd>g</kbd> files · <kbd>r</kbd> review mode</span>
       </div>
     </div>
   );
@@ -320,22 +329,24 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
   if (n.kind === "root" || n.kind === "dir") {
     const d = done(n.files);
     const all = d === n.files.length;
-    const meta = n.kind === "dir" ? dirMeta(n.files) : `${d}/${n.files.length}`;
+    const meta = n.kind === "dir" ? dirMeta(n.files, props.reviewMode) : "";
     const nameW = textWidth(n.name, n.kind === "root" ? `700 15px ${FONT.slice(5)}` : BOLD);
     return (
       <g
-        class={`gnode ${n.kind} ${n.files.length === 0 ? "context" : all ? "all-done" : ""} ${props.onPath ? "hot" : ""} ${n.kind === "dir" && n.collapsed ? "collapsed" : ""}`}
+        class={`gnode ${n.kind} ${n.files.length === 0 ? "context" : all && props.reviewMode ? "all-done" : ""} ${props.onPath ? "hot" : ""} ${n.kind === "dir" && n.collapsed ? "collapsed" : ""}`}
         onClick={() => n.kind === "dir" && props.onToggle(n.path)}
         role="treeitem"
         aria-expanded={n.kind === "dir" ? !n.collapsed : true}
       >
         <title>
           {n.kind === "dir" ? `${n.path}\n` : ""}
-          {plural(n.files.length, "changed file")}, {d} reviewed{n.kind === "dir" ? `\nClick to ${n.collapsed ? "expand" : "collapse"}` : ""}
+          {plural(n.files.length, "changed file")}
+          {props.reviewMode ? `, ${d} reviewed` : ""}
+          {n.kind === "dir" ? `\nClick to ${n.collapsed ? "expand" : "collapse"}` : ""}
         </title>
         <rect x={p.x} y={top} width={p.width} height={24} rx={12} />
         {/* Review progress along the bottom of the pill. */}
-        <rect class="pill-progress" x={p.x + 10} y={top + 20} width={n.files.length ? Math.max(0, (p.width - 20) * (d / n.files.length)) : 0} height={2} rx={1} />
+        {props.reviewMode && <rect class="pill-progress" x={p.x + 10} y={top + 20} width={n.files.length ? Math.max(0, (p.width - 20) * (d / n.files.length)) : 0} height={2} rx={1} />}
         <text x={p.x + 13} y={p.y + 4.5} class="pill-name">
           {n.name}
         </text>
@@ -405,15 +416,16 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
       </title>
       <rect class="hit" x={p.x - 6} y={top - 1} width={p.width + 12} height={26} rx={6} />
       <g
-        class="dot"
+        class={`dot ${props.reviewMode ? "clickable" : ""}`}
         onClick={(e) => {
+          if (!props.reviewMode) return;
           e.stopPropagation();
           props.onReview([f], f.review !== "reviewed");
         }}
       >
         <title>
           {f.status === "A" ? "New file" : f.status === "D" ? "Deleted" : `${pct(share)} of the file changed`}
-          {f.review === "reviewed" ? "\nReviewed. Click to undo" : "\nClick to mark reviewed"}
+          {!props.reviewMode ? "" : f.review === "reviewed" ? "\nReviewed. Click to undo" : "\nClick to mark reviewed"}
         </title>
         <circle cx={p.x + 7} cy={p.y} r={10} class="dot-hit" />
         {f.review === "reviewed" ? (
