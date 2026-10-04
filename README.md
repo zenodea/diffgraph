@@ -7,12 +7,14 @@ browser opens a live map of that repo's changes: which folders were touched, how
 and what depends on what. It's for getting a feel for a change before (or instead of)
 reading every line of it.
 
+[Website](https://zenodea.github.io/diffgraph/) · [GitHub](https://github.com/zenodea/diffgraph)
+
 ![The map: folders branch out to the files that changed](docs/screenshots/map.png)
 
 ## Install
 
 ```sh
-herdr plugin install zenodea/graphdiff
+herdr plugin install zenodea/diffgraph
 ```
 
 Then bind it in `~/.config/herdr/config.toml`:
@@ -31,13 +33,38 @@ Press `prefix+g` in any pane that's inside a git repo.
 
 ### The map
 
-Your repo as a tree, but only the parts that changed. Each folder is a branch. Thicker
-branches changed more, so the heavy parts stand out. Each file's dot fills like a pie
-with how much of that file changed, so a two-line tweak and a rewrite look different.
-Untouched files fold into one grey "n unchanged" node per folder.
+Your repo as a tree, but only the parts that changed. Each folder is a branch, and its
+files sit in a small grid next to it, so even a hundred-file change stays readable.
+Thicker branches changed more, so the heavy parts stand out. Each file's dot fills like a
+pie with how much of that file changed, so a two-line tweak and a rewrite look different.
+Each folder notes how much of it went untouched.
 
 It's live: as the agent writes, files flash, new ones appear and the rest glide out of the
-way. Pan with two fingers, pinch to zoom, press `0` to fit.
+way. Pan with two fingers, pinch to zoom, press `0` to fit, and move around with
+`h` `j` `k` `l`.
+
+### What it just did
+
+The **Last prompt** scope shows only what the agent changed for your latest prompt. And
+when an agent finishes a turn, herdr shows a notification with the shape of it, like
+*"claude finished · Changed 6 files: web/src 4, server/routes 2"*, so you know where to
+look before you open anything.
+
+### Who did what
+
+**Prompts** colours each file by the prompt that changed it; **Agents** colours it by the
+agent session that did, so with several agents in one repo you can see who touched what,
+and where they overlap. Hover an entry in the legend to see just its files.
+
+![Colour by prompt: hovering one prompt shows just the files it touched](docs/screenshots/prompts.png)
+
+### Risks
+
+Turn on **Risks** to flag things worth a second look: files that were mostly rewritten,
+very large changes, a deleted file or a removed export that something still imports, and
+code that changed with no tests touched.
+
+![Risk hints on a deleted file that's still imported and a removed export](docs/screenshots/risks.png)
 
 ### Imports
 
@@ -100,6 +127,10 @@ already reviewed, it's flagged as "edited again".
 - **Branch:** everything since the branch left `main` (or `master`), plus uncommitted work.
 - **Uncommitted:** only what isn't committed yet.
 - **Session:** only what the agent in this pane touched since its session started.
+- **Last prompt:** only what it touched for your latest prompt.
+
+Session and Last prompt read the agent's own transcript (Claude Code, Codex or pi), so they
+only see edits it made with its edit tools, not ones it made through shell commands.
 
 ## Config
 
@@ -110,7 +141,8 @@ Optional, in `$(herdr plugin config-dir graphdiff)/config.json`:
   "port": 4777,
   "base": "main",
   "ask": { "command": ["my-agent", "--read-only"], "format": "text" },
-  "summary": { "enabled": true }
+  "summary": { "enabled": true },
+  "notify": true
 }
 ```
 
@@ -122,6 +154,7 @@ Optional, in `$(herdr plugin config-dir graphdiff)/config.json`:
   whichever is installed. A custom command gets the prompt on stdin, runs in the repo, and
   its stdout is the answer.
 - `summary`: switch summaries off with `"enabled": false`, or set `command` the same way.
+- `notify`: `false` turns off the herdr notification when an agent finishes.
 
 ## How it works
 
@@ -131,6 +164,9 @@ request needs the token, and it exits after 30 idle minutes. It reads your repo 
 `git`, watches it for changes, and keeps review marks and question threads in herdr's
 plugin state directory. Nothing leaves your machine except the prompts you choose to
 send to a model (questions and summaries).
+
+On macOS, `prefix+g` brings an already-open graphdiff tab to the front in Chrome, Brave,
+Edge or Safari (Firefox can't be asked about its tabs, so there it opens a new one).
 
 `herdr plugin action invoke graphdiff.stop` stops the server.
 
@@ -147,13 +183,14 @@ herdr plugin link "$PWD"
 
 ```
 src/
-  cli.ts            open / serve / stop
+  cli.ts            open / serve / stop / notify
   server/
     core/           HTTP, live events, config, herdr
     git/            scopes, changed files, diffs
     review/         review marks
-    agents/         transcripts, "why", questions, summaries
-    deps/           import graph
+    agents/         transcripts, "why", questions, summaries, who did what
+    deps/           import graph, risk hints
+    notify.ts       the "agent finished" notification
   web/
     app/            page shell and top bar
     map/            the map, layout, pan and zoom
