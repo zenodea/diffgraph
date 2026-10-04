@@ -10,6 +10,7 @@ import { subscribe } from "./core/live.ts";
 import { repoOr404 } from "./core/repos.ts";
 import { setReviewed, sinceReview, withReviews } from "./review/review.ts";
 import { getSummaries } from "./agents/summaries.ts";
+import { sources } from "./agents/sources.ts";
 import { whyFor } from "./agents/why.ts";
 
 route("GET", "/api/repos/:id/changes", async ({ params, url }) => {
@@ -86,4 +87,10 @@ route("POST", "/api/repos/:id/summaries", async ({ params, body }) => {
   if (!Array.isArray(folders)) throw new HttpError(400, "folders required");
   const changes = await getChanges(repo, parseScope(scope ?? null));
   return { summaries: getSummaries(repo, changes, folders.map(String), Array.isArray(generate) ? generate.map(String) : []) };
+});
+
+route("GET", "/api/repos/:id/sources", async ({ params, url }) => {
+  const repo = repoOr404(params.id);
+  const changes = await getChanges(repo, parseScope(url.searchParams.get("scope")));
+  return { sources: await sources(repo, changes, url.searchParams.get("by") === "agent" ? "agent" : "prompt") };
 });

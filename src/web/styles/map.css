@@ -132,3 +132,11 @@
 .comb.hot .block-port { fill: var(--accent); }
 .comb.done .block-port { fill: color-mix(in srgb, var(--done) 55%, transparent); }
 .gnode.dir.focused rect:first-of-type { stroke: var(--accent); stroke-width: 2; fill: var(--accent-soft); }
+
+/* Colour by prompt / agent */
+.seg-tools { display: inline-flex; gap: 2px; }
+.pips circle { stroke: var(--bg); stroke-width: 1; }
+.graph.sourcing .gpos.dim { opacity: 0.18; }
+.summary-item.source p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.source-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }

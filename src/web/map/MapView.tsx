@@ -3,6 +3,7 @@ import type { Deps } from "../../server/deps/deps.ts";
 import type { Scope } from "../../server/git/git.ts";
 import type { ReviewedFile } from "../../server/review/review.ts";
 import type { Summary } from "../../server/agents/summaries.ts";
+import type { Source } from "../../server/agents/sources.ts";
 import { changedShare } from "../../shared.ts";
 import { entriesByDir, layoutGraph, type GraphNode, type Placed } from "./graph.ts";
 import { api, repoId } from "../lib/api.ts";
@@ -52,6 +53,10 @@ function pie(cx: number, cy: number, r: number, share: number): string | null {
   return `M${cx},${cy} L${cx},${cy - r} A${r},${r} 0 ${f > 0.5 ? 1 : 0} 1 ${x.toFixed(2)},${y.toFixed(2)} Z`;
 }
 
+/** Colours for prompts / agents on the map; picked to stay apart from the status colours' meaning. */
+const SOURCE_COLORS = ["#e8a33d", "#e06c9f", "#4fc1c1", "#b394f5", "#c8c86a", "#f0726b", "#7aa2f7", "#9ece6a"];
+const PIP = 11;
+
 const newsWidth = (kind: string) => textWidth(kind, `600 11px ${FONT.slice(5)}`) + 14;
 
 const pct = (share: number) => (share >= 0.995 ? "all" : share < 0.01 ? "under 1%" : `about ${Math.round(share * 100)}%`);
@@ -72,7 +77,7 @@ function dirMeta(files: ReviewedFile[], reviewMode: boolean) {
   return d === files.length ? `✓ ${files.length}` : `${d}/${files.length}`;
 }
 
-function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>, reviewMode: boolean): number {
+function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>, reviewMode: boolean, pips: Map<string, string[]>): number {
   switch (node.kind) {
     case "root":
       return textWidth(node.name, `700 15px ${FONT.slice(5)}`) + 28 + (node.untouched ? 10 + textWidth(untouchedText(node.untouched), UNTOUCHED) : 0);
@@ -88,11 +93,45 @@ function measure(node: GraphNode, threads: Map<string, number>, news: Map<string
       if (f.review === "changed") w += 92;
       if (news.get(f.path)) w += newsWidth(news.get(f.path)!) + 8;
       if (threads.get(f.path)) w += 34;
+      const p = pips.get(f.path)?.length ?? 0;
+      if (p) w += p * PIP + 6;
       return w + 14;
     }
     case "ghost":
       return 22 + textWidth(node.name, `italic ${FONT}`);
   }
+}
+
+function SourcePanel({ by, sources, onHover }: { by: "prompt" | "agent"; sources: Source[]; onHover: (id: string | null) => void }) {
+  return (
+    <aside class="summary-panel" aria-label={by === "prompt" ? "Prompts" : "Agents"} onMouseLeave={() => onHover(null)}>
+      <div class="summary-item root">
+        <div class="summary-head">
+          <span>{by === "prompt" ? "By prompt" : "By agent"}</span>
+          <span class="muted">{plural(sources.length, by === "prompt" ? "prompt" : "session")}</span>
+        </div>
+        <p class="muted">
+          {sources.length
+            ? "Hover one to see just what it touched. Files with more than one dot were changed by more than one."
+            : by === "prompt"
+              ? "No prompt in this pane's session changed these files."
+              : "No agent session found that changed these files."}
+        </p>
+      </div>
+      {sources.map((src, i) => (
+        <div key={src.id} class="summary-item source" onMouseEnter={() => onHover(src.id)}>
+          <div class="summary-head">
+            <span class="source-name">
+              <i class="swatch" style={{ background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
+              <span>{src.detail}</span>
+            </span>
+            <span class="muted">{src.files.length}</span>
+          </div>
+          <p>{src.label}</p>
+        </div>
+      ))}
+    </aside>
+  );
 }
 
 function SummaryPanel(props: {
@@ -239,10 +278,35 @@ export function MapView(props: Props) {
     };
   }, [filesKey, showLinks, props.scope]);
 
+  // Colour by prompt or by agent: who changed what, with a legend panel.
+  const [colourBy, setColourBy] = usePersisted<"off" | "prompt" | "agent">("mapColourBy", "off");
+  const [sources, setSources] = useState<Source[]>([]);
+  const [hoveredSource, setHoveredSource] = useState<string | null>(null);
+  useEffect(() => {
+    if (colourBy === "off") return setSources([]);
+    let live = true;
+    const t = setTimeout(() => {
+      api<{ sources: Source[] }>(`/api/repos/${repoId}/sources?scope=${props.scope}&by=${colourBy}`).then((r) => live && setSources(r.sources), () => {});
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [filesKey, colourBy, props.scope]);
+  const pips = useMemo(() => {
+    const m = new Map<string, string[]>();
+    sources.forEach((src, i) => src.files.forEach((f) => m.set(f, [...(m.get(f) ?? []), SOURCE_COLORS[i % SOURCE_COLORS.length]])));
+    return m;
+  }, [sources]);
+  // Only dim while hovering an entry that's actually in the current list.
+  const hoveredSrc = hoveredSource ? sources.find((x) => x.id === hoveredSource) : undefined;
+  const lit = hoveredSrc ? new Set(hoveredSrc.files) : null;
+  useEffect(() => setHoveredSource(null), [colourBy]);
+
   const ghosts = showLinks && deps ? deps.dependents : [];
   const layout = useMemo(
-    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news, props.reviewMode), ghosts),
-    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts, props.reviewMode],
+    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news, props.reviewMode, pips), ghosts),
+    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts, props.reviewMode, pips],
   );
   const links = useMemo(() => (showLinks && deps ? placeLinks(layout.nodes, deps) : []), [layout, deps, showLinks]);
   const width = Math.max(layout.width, ...links.map((l) => l.right + 24));
@@ -403,7 +467,22 @@ export function MapView(props: Props) {
             {props.news.size} new · clear
           </button>
         )}
-        <button class={`btn small ${showSummary ? "on" : ""}`} onClick={() => setShowSummary(!showSummary)} title="One-line summaries of what changed in each folder">
+        <span class="seg-tools" role="group" aria-label="Colour the map by">
+          {(["prompt", "agent"] as const).map((by) => (
+            <button
+              key={by}
+              class={`btn small ${colourBy === by ? "on" : ""}`}
+              title={by === "prompt" ? "Colour files by the prompt that changed them" : "Colour files by the agent session that changed them"}
+              onClick={() => {
+                setColourBy(colourBy === by ? "off" : by);
+                if (colourBy !== by) setShowSummary(false);
+              }}
+            >
+              {by === "prompt" ? "Prompts" : "Agents"}
+            </button>
+          ))}
+        </span>
+        <button class={`btn small ${showSummary ? "on" : ""}`} onClick={() => { setShowSummary(!showSummary); if (!showSummary) setColourBy("off"); }} title="One-line summaries of what changed in each folder">
           Summary
         </button>
         <button class={`btn small ${showLinks ? "on" : ""}`} onClick={() => setShowLinks(!showLinks)} title="Show which changed files import each other, and unchanged files that use them">
@@ -421,7 +500,7 @@ export function MapView(props: Props) {
       </div>
       <div class={`map-scroll ${pz.dragging ? "dragging" : ""}`} ref={pz.ref}>
         <svg
-          class={`graph ${hovered ? "hovering" : ""}`}
+          class={`graph ${hovered ? "hovering" : ""} ${lit ? "sourcing" : ""}`}
           width="100%"
           height="100%"
           role="tree"
@@ -505,6 +584,8 @@ export function MapView(props: Props) {
               {...props}
               selected={focusDir !== null ? null : selected}
               focused={n.node.kind === "dir" && n.node.path === focusDir}
+              pips={n.node.kind === "file" ? pips.get(n.node.path) : undefined}
+              lit={!lit || (n.node.kind === "file" ? lit.has(n.node.path) : n.node.kind === "dir" || n.node.kind === "root" ? n.node.files.some((f) => lit.has(f.path)) : false)}
               onPath={onPath.has(n)}
               onToggle={toggleDir}
             />
@@ -513,6 +594,9 @@ export function MapView(props: Props) {
         </svg>
       </div>
       </div>
+      {colourBy !== "off" && (
+        <SourcePanel by={colourBy} sources={sources} onHover={setHoveredSource} />
+      )}
       {showSummary && (
         <SummaryPanel
           folders={folders}
@@ -533,7 +617,7 @@ export function MapView(props: Props) {
   );
 }
 
-type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void; focused?: boolean };
+type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void; focused?: boolean; pips?: string[]; lit?: boolean };
 
 /**
  * Positions a node with a CSS transform so it glides when the layout reflows (a new
@@ -542,7 +626,7 @@ type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: str
 function Node(props: NodeProps) {
   const p = props.placed;
   return (
-    <g class="gpos" style={{ transform: `translate(${p.x}px, ${p.y}px)` }}>
+    <g class={`gpos ${props.lit === false ? "dim" : ""}`} style={{ transform: `translate(${p.x}px, ${p.y}px)` }}>
       <NodeBody {...props} placed={{ ...p, x: 0, y: 0 }} />
     </g>
   );
@@ -699,6 +783,17 @@ function NodeBody(props: NodeProps) {
               <text x={x + w / 2} y={p.y + 3.5} text-anchor="middle">
                 {kind}
               </text>
+            </g>
+          );
+        })()}
+      {props.pips && props.pips.length > 0 &&
+        (() => {
+          const x = extraX + (threads > 0 ? 34 : 0);
+          return (
+            <g class="pips">
+              {props.pips.map((c, i) => (
+                <circle key={i} cx={x + 5 + i * PIP} cy={p.y} r={4.5} fill={c} />
+              ))}
             </g>
           );
         })()}

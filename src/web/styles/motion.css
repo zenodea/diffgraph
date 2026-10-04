@@ -7,7 +7,7 @@
 }
 
 /* Map: nodes fade in, branches draw themselves, and everything glides on reflow. */
-.gpos { transition: transform 0.38s var(--ease-out); }
+.gpos { transition: transform 0.38s var(--ease-out), opacity 0.18s; }
 .gpos > .gnode { animation: node-in 0.42s var(--ease-out) both; transform-box: fill-box; transform-origin: left center; }
 @keyframes node-in { from { opacity: 0; transform: translateX(-6px) scale(0.96); } }
 .edge { transition: d 0.38s var(--ease-out), stroke 0.2s, stroke-width 0.2s; animation: edge-in 0.5s var(--ease-out) both; }
