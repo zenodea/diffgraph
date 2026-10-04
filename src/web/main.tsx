@@ -8,6 +8,7 @@ import { api, repoId, type Repo } from "./api.ts";
 import type { ViewMode } from "./DiffView.tsx";
 import { FilePane, type AskRequest } from "./FilePane.tsx";
 import { MapView } from "./MapView.tsx";
+import { useNews, type News } from "./news.ts";
 import { readHashPath, useHashPath, useKeys, usePersisted } from "./hooks.ts";
 import { Check } from "./icons.tsx";
 import { useLive, useTick, type Live } from "./live.ts";
@@ -113,6 +114,13 @@ function App() {
 
   const order = useMemo(() => visibleOrder(tree, collapsed), [tree, collapsed]);
   const current = selected ? byPath.get(selected) ?? null : null;
+  // Only once the list matches the scope, or a scope switch would compare the wrong files.
+  const news = useNews(changes && changes.scope === scope ? files : null, scope);
+  // Looking at a file's diff acknowledges it (again whenever it changes in front of you).
+  const currentSig = current ? `${current.status}:${current.added}:${current.deleted}:${current.mtime}` : "";
+  useEffect(() => {
+    if (view === "diff" && current) news.ack([current.path]);
+  }, [view, currentSig]);
   const done = files.filter((f) => f.review === "reviewed").length;
   const left = files.length - done;
 
@@ -257,6 +265,11 @@ function App() {
         </div>
       )}
 
+      <NewsBanner news={news} onShow={() => {
+        const first = order.find((f) => news.files.has(f.path));
+        if (first) open(first.path);
+      }} />
+
       {view === "map" ? (
         <MapView
           repoName={repo.name}
@@ -265,6 +278,7 @@ function App() {
           selected={selected}
           recent={recent}
           threadCounts={threadCounts}
+          news={news.files}
           onOpen={open}
           onReview={(fs, r) => review(fs, r)}
         />
@@ -284,7 +298,7 @@ function App() {
           {files.length === 0 && !showAll ? (
             <div class="sidebar-empty">No changes in this scope.</div>
           ) : (
-            <Tree root={tree} selected={selected} collapsed={collapsed} onSelect={setSelected} onToggle={toggle} onReview={(fs, r) => review(fs, r)} hideReviewed={hideReviewed} recent={recent} threadCounts={threadCounts} />
+            <Tree root={tree} selected={selected} collapsed={collapsed} onSelect={setSelected} onToggle={toggle} onReview={(fs, r) => review(fs, r)} hideReviewed={hideReviewed} recent={recent} threadCounts={threadCounts} news={news.files} />
           )}
           <div class="keys-hint">
             <span><kbd>j</kbd> <kbd>k</kbd> move</span>
@@ -321,6 +335,30 @@ function App() {
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+function NewsBanner({ news, onShow }: { news: News; onShow: () => void }) {
+  const added = [...news.files.values()].filter((k) => k === "new").length;
+  const updated = news.files.size - added;
+  if (!news.files.size && !news.gone) return null;
+  const parts = [added && plural(added, "new file"), updated && `${updated} updated`, news.gone && `${news.gone} no longer changed`].filter(Boolean);
+  return (
+    <div class="banner news" role="status">
+      <span class="news-dot" aria-hidden="true" />
+      <span>
+        <b>Since you last looked:</b> {parts.join(" · ")}
+      </span>
+      {news.files.size > 0 && (
+        <button class="link" onClick={onShow}>
+          Show the first one
+        </button>
+      )}
+      <div class="spacer" />
+      <button class="btn small" onClick={() => news.ack()} title="Mark all of this as seen">
+        Got it
+      </button>
     </div>
   );
 }

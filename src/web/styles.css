@@ -632,6 +632,14 @@ kbd {
   .gnode.flash .hit { animation: none; }
 }
 
+/* News since you last looked */
+.banner.news { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); border-bottom-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.news-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+.news-tag { font-size: 11px; font-weight: 600; color: #fff; background: var(--accent-fill); padding: 1px 7px; border-radius: 999px; }
+.news-tag-svg rect { fill: var(--accent-fill); }
+.news-tag-svg text { fill: #fff; font-size: 11px; font-weight: 600; }
+.news-pip { fill: var(--accent); }
+
 .notice { max-width: 520px; margin: 18vh auto; padding: 0 16px; text-align: center; }
 .notice h1 { font-size: 20px; font-weight: 650; margin: 0 0 8px; }
 .notice p { color: var(--muted); margin: 0; }

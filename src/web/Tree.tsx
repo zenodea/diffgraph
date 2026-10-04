@@ -15,6 +15,7 @@ interface Props {
   /** When the watcher last saw each path change (ms). */
   recent: Map<string, number>;
   threadCounts: Map<string, number>;
+  news: Map<string, "new" | "updated">;
 }
 
 const FRESH_MS = 2 * 60_000;
@@ -58,6 +59,7 @@ function Node(props: Props & { node: TreeNode; depth: number }) {
           {f?.oldPath && <span class="renamed-from"> ← {f.oldPath.split("/").pop()}</span>}
         </span>
         {f?.review === "changed" && <span class="again" title="Edited again after you reviewed it">edited again</span>}
+        {props.news.get(node.path) && <span class="news-tag" title="Since you last looked">{props.news.get(node.path)}</span>}
         {props.threadCounts.get(node.path) ? (
           <span class="q-count" title={`${props.threadCounts.get(node.path)} questions asked here`}>
             <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>

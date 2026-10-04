@@ -12,6 +12,7 @@ interface Props {
   selected: string | null;
   recent: Map<string, number>;
   threadCounts: Map<string, number>;
+  news: Map<string, "new" | "updated">;
   onOpen: (path: string) => void;
   onReview: (files: ReviewedFile[], reviewed: boolean) => void;
 }
@@ -39,6 +40,8 @@ function pie(cx: number, cy: number, r: number, share: number): string | null {
   return `M${cx},${cy} L${cx},${cy - r} A${r},${r} 0 ${f > 0.5 ? 1 : 0} 1 ${x.toFixed(2)},${y.toFixed(2)} Z`;
 }
 
+const newsWidth = (kind: string) => textWidth(kind, `600 11px ${FONT.slice(5)}`) + 14;
+
 const pct = (share: number) => (share >= 0.995 ? "all" : share < 0.01 ? "under 1%" : `about ${Math.round(share * 100)}%`);
 
 const short = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n));
@@ -55,16 +58,17 @@ function dirMeta(files: ReviewedFile[]) {
   return d === files.length ? `✓ ${files.length}` : `${d}/${files.length}`;
 }
 
-function measure(node: GraphNode, threads: Map<string, number>): number {
+function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>): number {
   switch (node.kind) {
     case "root":
       return textWidth(node.name, `700 15px ${FONT.slice(5)}`) + 28;
     case "dir":
-      return textWidth(node.name, BOLD) + 10 + textWidth(dirMeta(node.files), SMALL) + (node.collapsed ? 16 : 0) + 26;
+      return textWidth(node.name, BOLD) + 10 + textWidth(dirMeta(node.files), SMALL) + (node.collapsed ? 16 : 0) + 26 + (node.files.some((f) => news.has(f.path)) ? 12 : 0);
     case "file": {
       const f = node.file;
       let w = 22 + textWidth(node.name, FONT) + 10 + textWidth(statText(f), SMALL);
       if (f.review === "changed") w += 92;
+      if (news.get(f.path)) w += newsWidth(news.get(f.path)!) + 8;
       if (threads.get(f.path)) w += 34;
       return w + 14;
     }
@@ -93,8 +97,8 @@ export function MapView(props: Props) {
   const collapsed = useMemo(() => new Set(collapsedList), [collapsedList]);
   const entries = useMemo(() => (allPaths ? entriesByDir(allPaths) : null), [allPaths]);
   const layout = useMemo(
-    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts)),
-    [files, entries, collapsed, props.threadCounts, props.repoName],
+    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news)),
+    [files, entries, collapsed, props.threadCounts, props.repoName, props.news],
   );
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -226,6 +230,11 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
             {n.collapsed ? " ▸" : ""}
           </text>
         )}
+        {n.kind === "dir" && n.files.some((f) => props.news.has(f.path)) && (
+          <circle cx={p.x + p.width - 11} cy={p.y} r={3.5} class="news-pip">
+            <title>Something here is new since you last looked</title>
+          </circle>
+        )}
       </g>
     );
   }
@@ -311,6 +320,22 @@ function Node(props: Props & { placed: Placed; onPath: boolean; onToggle: (path:
               <rect x={x} y={p.y - 9} width={84} height={18} rx={9} />
               <text x={x + 42} y={p.y + 3.5} text-anchor="middle">
                 edited again
+              </text>
+            </g>
+          );
+        })()}
+      {props.news.get(f.path) &&
+        (() => {
+          const kind = props.news.get(f.path)!;
+          const x = extraX;
+          const w = newsWidth(kind);
+          extraX += w + 8;
+          return (
+            <g class="news-tag-svg">
+              <title>{kind === "new" ? "Appeared since you last looked" : "Changed since you last looked"}</title>
+              <rect x={x} y={p.y - 9} width={w} height={18} rx={9} />
+              <text x={x + w / 2} y={p.y + 3.5} text-anchor="middle">
+                {kind}
               </text>
             </g>
           );
