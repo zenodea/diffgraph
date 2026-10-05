@@ -7,8 +7,12 @@
 .map-scroll { flex: 1; min-height: 0; overflow: hidden; touch-action: none; cursor: grab; user-select: none; }
 .map-scroll.dragging { cursor: grabbing; }
 .map-scroll .gnode { cursor: pointer; }
-.viewport { transform-origin: 0 0; }
-.viewport.animating { transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.map-scroll { position: relative; }
+.map-layer { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+/* Promoted to its own layer only while moving; afterwards it's redrawn crisply. */
+.map-layer.moving { will-change: transform; }
+.map-layer.animating { transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.map-layer svg { display: block; overflow: visible; }
 
 .summary-panel {
   width: min(320px, 38vw);
@@ -38,8 +42,8 @@
   gap: 10px;
   padding: 4px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter: blur(6px);
+  /* Solid, not frosted: a backdrop blur over a moving map is re-blurred every frame. */
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
 }
 .map-tools .zoom { display: inline-flex; gap: 2px; }
 .map-tools .btn.on { border-color: var(--accent); color: var(--accent); }

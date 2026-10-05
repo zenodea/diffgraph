@@ -37,11 +37,20 @@ const untouchedText = (n: number) => `· ${n} untouched`;
 const FRESH_MS = 2 * 60_000;
 
 let ctx: CanvasRenderingContext2D | null = null;
+const widths = new Map<string, number>();
+/** Label width in px, measured once per font and text (the map asks for thousands per render). */
 function textWidth(text: string, font: string): number {
-  ctx ??= document.createElement("canvas").getContext("2d");
-  if (!ctx) return text.length * 7.5;
-  ctx.font = font;
-  return ctx.measureText(text).width;
+  const key = `${font}\u0000${text}`;
+  let w = widths.get(key);
+  if (w === undefined) {
+    ctx ??= document.createElement("canvas").getContext("2d");
+    if (ctx) {
+      ctx.font = font;
+      w = ctx.measureText(text).width;
+    } else w = text.length * 7.5;
+    widths.set(key, w);
+  }
+  return w;
 }
 
 /** A pie slice from 12 o'clock, clockwise; tiny changes still get a visible sliver. */
@@ -519,16 +528,19 @@ export function MapView(props: Props) {
         </button>
         <span class="zoom">
           <button class="btn small" onClick={() => pz.zoomBy(1 / 1.2)} aria-label="Zoom out" title="Zoom out (−)">−</button>
-          <button class="btn small" onClick={pz.reset} title="Actual size">{Math.round(pz.view.k * 100)}%</button>
+          <button class="btn small" onClick={pz.reset} title="Actual size">{Math.round(pz.zoom * 100)}%</button>
           <button class="btn small" onClick={() => pz.zoomBy(1.2)} aria-label="Zoom in" title="Zoom in (+)">+</button>
           <button class="btn small" onClick={() => pz.fit(width, layout.height)} title="Fit everything (0)">Fit</button>
         </span>
       </div>
       <div class={`map-scroll ${pz.dragging ? "dragging" : ""}`} ref={pz.ref}>
+        {/* The layer is what moves (a CSS transform the browser composites); the
+            map inside is drawn at its natural size and isn't re-rendered while you pan. */}
+        <div class="map-layer" ref={pz.layerRef}>
         <svg
           class={`graph ${hovered ? "hovering" : ""} ${lit ? "sourcing" : ""}`}
-          width="100%"
-          height="100%"
+          width={width}
+          height={layout.height}
           role="tree"
           aria-label="Changed files as a map"
           onMouseOver={(e) => setHovered((e.target as Element).closest?.("[data-path]")?.getAttribute("data-path") ?? null)}
@@ -542,10 +554,6 @@ export function MapView(props: Props) {
               <path d="M0,0 L8,4 L0,8 z" class="arrow hot" />
             </marker>
           </defs>
-          <g
-            class={`viewport ${pz.animating ? "animating" : ""}`}
-            style={{ transform: `translate(${pz.view.x}px, ${pz.view.y}px) scale(${pz.view.k})` }}
-          >
           <g class="edges">
             {layout.nodes.map((n) => {
               if (!n.parent || n.block) return null;
@@ -617,8 +625,8 @@ export function MapView(props: Props) {
               onToggle={toggleDir}
             />
           ))}
-          </g>
         </svg>
+        </div>
       </div>
       </div>
       {colourBy !== "off" && (

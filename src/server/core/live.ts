@@ -1,5 +1,6 @@
 import { watch, type FSWatcher } from "node:fs";
 import type { ServerResponse } from "node:http";
+import { invalidateChanges } from "../git/changes.ts";
 import { fingerprint } from "../git/git.ts";
 import { getAgent } from "./herdr.ts";
 import { currentRepo, type Repo } from "./repos.ts";
@@ -92,6 +93,7 @@ class Hub {
     }
     if (next === this.last) return;
     this.last = next;
+    invalidateChanges(this.repo.id);
     for (const c of this.clients) send(c.res, "changes", { paths });
   }
 

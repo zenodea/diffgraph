@@ -176,8 +176,24 @@ export async function dependencies(root: string, changed: string[]): Promise<Dep
   return { edges, dependents };
 }
 
+type Graph = Deps & { importers: Map<string, string[]> };
+const graphCache = new Map<string, { at: number; value: Promise<Graph> }>();
+const GRAPH_CACHE_MS = 3000;
+
 /** Like `dependencies`, plus every file importing each changed file (uncapped, for risk checks). */
-export async function importGraph(root: string, changed: string[]): Promise<Deps & { importers: Map<string, string[]> }> {
+export function importGraph(root: string, changed: string[]): Promise<Graph> {
+  // Imports and Risks both ask for this right after every edit; scan once.
+  const key = `${root}\n${changed.join("\n")}`;
+  const hit = graphCache.get(key);
+  if (hit && Date.now() - hit.at < GRAPH_CACHE_MS) return hit.value;
+  for (const [k, v] of graphCache) if (Date.now() - v.at >= GRAPH_CACHE_MS) graphCache.delete(k);
+  const value = scanGraph(root, changed);
+  graphCache.set(key, { at: Date.now(), value });
+  value.catch(() => graphCache.delete(key));
+  return value;
+}
+
+async function scanGraph(root: string, changed: string[]): Promise<Graph> {
   const listing = (await allFiles(root)).filter((f) => SOURCE.test(f));
   const sources = listing.length > MAX_FILES ? [...new Set([...changed.filter((c) => SOURCE.test(c)), ...listing.slice(0, MAX_FILES)])] : listing;
   // Deleted files are gone from disk but can still be imported.

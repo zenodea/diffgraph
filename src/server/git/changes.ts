@@ -19,7 +19,28 @@ export function parseScope(value: string | null): Scope {
   throw new HttpError(400, `unknown scope: ${value}`);
 }
 
-export async function getChanges(repo: Repo, scope: Scope): Promise<Changes> {
+// One computation per repo and scope, shared by every request that needs it (a
+// single edit makes the page ask for the changes, the diff, imports, risks... at
+// once). Dropped when the watcher sees the repo change, and after a short TTL for
+// anything it can't see (another branch checked out elsewhere, a transcript).
+const CACHE_MS = 2000;
+const cache = new Map<string, { at: number; value: Promise<Changes> }>();
+
+export function invalidateChanges(repoId: string) {
+  for (const k of cache.keys()) if (k.startsWith(repoId + ":")) cache.delete(k);
+}
+
+export function getChanges(repo: Repo, scope: Scope): Promise<Changes> {
+  const key = `${repo.id}:${scope}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
+  const value = computeChanges(repo, scope);
+  cache.set(key, { at: Date.now(), value });
+  value.catch(() => cache.delete(key));
+  return value;
+}
+
+async function computeChanges(repo: Repo, scope: Scope): Promise<Changes> {
   const [state, session] = await Promise.all([repoState(repo.root, loadConfig().base), currentSession(repo)]);
   const info = session && sessionInfo(repo, session);
   if (scope !== "session" && scope !== "prompt") {

@@ -309,8 +309,23 @@ async function codexSessions(roots: string[], since: number): Promise<SessionRef
   return out;
 }
 
+const findCache = new Map<string, { at: number; value: Promise<SessionRef[]> }>();
+const FIND_CACHE_MS = 15_000;
+
 /** Sessions of any agent that ran in this repo and were active since `since` (ms), newest first. */
-export async function findSessions(root: string, since: number, limit = 8): Promise<SessionRef[]> {
+export function findSessions(root: string, since: number, limit = 8): Promise<SessionRef[]> {
+  // Scanning agents' session folders (Codex keeps one per day) is the slow part;
+  // reuse a recent scan, keyed coarsely on `since` so nearby calls share it.
+  const key = `${root}|${Math.floor(since / 60_000)}|${limit}`;
+  const hit = findCache.get(key);
+  if (hit && Date.now() - hit.at < FIND_CACHE_MS) return hit.value;
+  const value = scanSessions(root, since, limit);
+  findCache.set(key, { at: Date.now(), value });
+  value.catch(() => findCache.delete(key));
+  return value;
+}
+
+async function scanSessions(root: string, since: number, limit: number): Promise<SessionRef[]> {
   const roots = rootVariants(root);
   const found: SessionRef[] = [];
   for (const r of roots) {
