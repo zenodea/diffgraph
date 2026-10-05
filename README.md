@@ -7,14 +7,14 @@ browser opens a live map of that repo's changes: which folders were touched, how
 and what depends on what. It's for getting a feel for a change before (or instead of)
 reading every line of it.
 
-[Website](https://dea.dev/diffgraph/) · [GitHub](https://github.com/zenodea/diffgraph)
+[Website](https://dea.dev/graphdiff/) · [GitHub](https://github.com/zenodea/graphdiff)
 
 ![The map: folders branch out to the files that changed](docs/screenshots/map.png)
 
 ## Install
 
 ```sh
-herdr plugin install zenodea/diffgraph
+herdr plugin install zenodea/graphdiff
 ```
 
 Then bind it in `~/.config/herdr/config.toml`:
