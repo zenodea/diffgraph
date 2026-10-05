@@ -117,8 +117,8 @@ try {
   else if (command === "stop") await stop();
   else if (command === "tui-open") await openTuiPane();
   else if (command === "tui") {
-    const { runTui } = await import("./tui/app.ts");
-    await runTui();
+    const { runTui, showCrash } = await import("./tui/app.ts");
+    await runTui().catch(showCrash);
   }
   else if (command === "notify") {
     // Runs on every agent status change: never make noise when something's off.

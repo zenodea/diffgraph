@@ -25,11 +25,12 @@ id = "tui"
 title = "graphdiff: map in the terminal"
 command = ["node", "src/cli.ts", "tui-open"]
 
+# Panes start in the space's folder, not the plugin's, so the script path must be absolute.
 [[panes]]
 id = "tui"
 title = "graphdiff"
 placement = "overlay"
-command = ["node", "src/cli.ts", "tui"]
+command = ["sh", "-c", "exec node \"$HERDR_PLUGIN_ROOT/src/cli.ts\" tui"]
 
 # When an agent finishes a turn, a herdr notification says where it made changes.
 [[events]]

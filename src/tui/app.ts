@@ -6,7 +6,10 @@ import type { Changes } from "../server/git/changes.ts";
 import type { DiffLine, Hunk } from "../server/git/diff.ts";
 import type { Scope } from "../server/git/git.ts";
 import type { ReviewedFile } from "../server/review/review.ts";
+import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import { connect, type Connection } from "../connect.ts";
+import { stateDir } from "../server/core/env.ts";
 import { bold, c, dim, inverse, pad, reset, screen, truncate, width } from "./ansi.ts";
 import { renderRows, textMap, type Stop } from "./layout.ts";
 
@@ -41,8 +44,10 @@ export async function runTui(): Promise<void> {
   const conn = await connect(cwd, process.env.GRAPHDIFF_PANE ?? null, process.env.GRAPHDIFF_AGENT ?? null);
   if (!conn) {
     process.stdout.write(`${cwd} isn't inside a git repo. Press any key.\n`);
+    if (process.stdin.isTTY) process.stdin.setRawMode(true);
+    process.stdin.resume();
     await new Promise((r) => process.stdin.once("data", r));
-    return;
+    process.exit(0);
   }
 
   const s: State = {
@@ -238,11 +243,8 @@ export async function runTui(): Promise<void> {
   const restore = () => out.write(screen.leave);
   process.on("exit", restore);
   process.on("SIGTERM", quit);
-  process.on("uncaughtException", (e) => {
-    restore();
-    console.error(e);
-    process.exit(1);
-  });
+  process.on("uncaughtException", (e) => void showCrash(e));
+  process.on("unhandledRejection", (e) => void showCrash(e));
   emitKeypressEvents(process.stdin);
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   process.stdin.on("keypress", onKey);
@@ -254,6 +256,24 @@ export async function runTui(): Promise<void> {
   draw();
   await load();
   void listen();
+}
+
+/**
+ * Something broke: log it, and keep the pane open with the error on screen (a
+ * herdr overlay closes when its process exits, which would hide what happened).
+ */
+export async function showCrash(e: unknown): Promise<never> {
+  const text = e instanceof Error ? (e.stack ?? e.message) : String(e);
+  try {
+    appendFileSync(join(stateDir, "tui.log"), `${new Date().toISOString()} ${process.cwd()}\n${text}\n\n`);
+  } catch {}
+  process.stdout.write(`${screen.leave}\n${c.del}graphdiff hit an error:${reset}\n${text}\n\n${c.muted}(also in ${join(stateDir, "tui.log")}) · any key to close${reset}\n`);
+  try {
+    if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  } catch {}
+  process.stdin.resume();
+  await new Promise((r) => process.stdin.once("data", r));
+  process.exit(1);
 }
 
 const key = (st: Stop) => `${st.kind === "file" ? "f" : "d"}:${st.path}`;

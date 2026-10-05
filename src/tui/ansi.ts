@@ -25,7 +25,8 @@ export const c = {
   ren: fg(179, 148, 245),
   warn: fg(240, 167, 90),
   done: fg(87, 192, 108),
-  selBg: bg(37, 44, 74),
+  // The selection: bright enough to find at a glance on a dark terminal.
+  selBg: `${bg(79, 107, 237)}${fg(255, 255, 255)}`,
   addBg: bg(21, 41, 26),
   delBg: bg(51, 24, 23),
   barBg: bg(27, 27, 26),

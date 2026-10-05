@@ -42,14 +42,15 @@ function fileLabel(f: ReviewedFile, selected: boolean, news?: string): string {
     ? `${c.muted}bin`
     : [f.added ? `${c.add}+${f.added}` : "", f.deleted ? `${c.del}−${f.deleted}` : ""].filter(Boolean).join(" ");
   const sel = selected ? `${c.selBg}${bold}` : "";
+  const shownName = selected ? `${sel}${name}` : `${nameStyle}${name}`;
   const again = f.review === "changed" ? ` ${c.warn}edited again${reset}` : "";
   const tag = news ? ` ${c.accent}${news}${reset}` : "";
-  return `${pie(f)} ${sel}${nameStyle}${name}${reset} ${stats}${reset}${again}${tag}`;
+  return `${pie(f)} ${shownName}${reset} ${stats}${reset}${again}${tag}`;
 }
 
 function dirLabel(name: string, count: number, untouched: number, collapsed: boolean, selected: boolean, root = false): string {
   const sel = selected ? `${c.selBg}` : "";
-  const label = root ? `${bold}${c.text}${name}` : `${bold}${c.text}${name}${reset}${sel} ${c.muted}${count}`;
+  const label = root ? `${bold}${c.text}${name}` : selected ? `${sel}${bold}${name} ${count}` : `${bold}${c.text}${name}${reset} ${c.muted}${count}`;
   const more = untouched ? ` ${c.faint}${italic}· ${untouched} untouched` : "";
   return `${sel}${label}${collapsed ? ` ${c.muted}▸` : ""}${reset}${more}${reset}`;
 }
