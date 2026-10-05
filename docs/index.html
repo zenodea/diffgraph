@@ -164,6 +164,13 @@ h2 { margin: 0 0 12px; font-size: clamp(26px, 3.4vw, 36px); letter-spacing: -0.0
   box-shadow: 0 24px 60px rgb(0 0 0 / 0.45);
 }
 
+.terms { display: grid; gap: 20px; }
+.term { border: 1px solid var(--border); border-radius: 12px; background: #131312; overflow: hidden; box-shadow: 0 24px 60px rgb(0 0 0 / 0.45); }
+.term-bar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
+.term-bar .dots { display: flex; gap: 6px; }
+.term-bar .dots i { width: 10px; height: 10px; border-radius: 50%; background: #2c2c29; }
+.term pre { margin: 0; padding: 14px 16px 16px; overflow-x: auto; font: 12.5px/1.2 var(--mono); color: #ecebe6; }
+.sub code, .sub .k { font: 600 0.85em var(--mono); padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel-2); color: var(--text); }
 .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; counter-reset: step; }
 .step { padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
 .step::before { counter-increment: step; content: counter(step); display: inline-grid; place-items: center; width: 28px; height: 28px; margin-bottom: 12px; border-radius: 50%; background: var(--accent-fill); color: #fff; font-weight: 700; font-size: 14px; }
@@ -204,6 +211,7 @@ footer { padding-block: 40px calc(40px + env(safe-area-inset-bottom, 0px)); bord
     <div class="nav-links">
       <a href="#features">Features</a>
       <a href="#tour">Tour</a>
+      <a href="#terminal">Terminal</a>
       <a href="#install">Install</a>
       <a class="gh" href="https://github.com/zenodea/graphdiff">GitHub ↗</a>
     </div>
@@ -316,6 +324,48 @@ footer { padding-block: 40px calc(40px + env(safe-area-inset-bottom, 0px)); bord
   </div>
 </section>
 
+<section id="terminal">
+  <div class="wrap">
+    <h2 class="reveal">Or stay in the terminal</h2>
+    <p class="sub reveal"><kbd class="k">prefix+shift+g</kbd> opens the same map right inside herdr, as an overlay over the pane you're in. Same scopes, same live updates, drawn in text: folders branch with box lines, files sit in grids, dots fill <code>○ ◔ ◑ ◕ ●</code>. <kbd class="k">j</kbd> <kbd class="k">k</kbd> to move, Enter for the diff, <kbd class="k">o</kbd> to jump to the browser.</p>
+    <div class="terms">
+      <div class="term reveal">
+        <div class="term-bar"><span class="dots"><i></i><i></i><i></i></span>herdr · graphdiff</div>
+        <pre><span style="background:#1b1b1a"> </span><span style="color:#ecebe6;background:#1b1b1a;font-weight:700">taskboard</span><span style="background:#1b1b1a">  </span><span style="color:#9a9a93;background:#1b1b1a">due-dates → main</span><span style="background:#1b1b1a">  </span><span style="color:#1b1b1a;background:#ecebe6"> Branch </span><span style="color:#9a9a93;background:#1b1b1a"> Uncommitted  Session  Last prompt </span><span style="background:#1b1b1a">      </span><span style="color:#9a9a93;background:#1b1b1a">10 files </span><span style="color:#57c06c;background:#1b1b1a">+64 </span><span style="color:#f0726b;background:#1b1b1a">−9</span>
+
+ <span style="color:#ecebe6;font-weight:700">taskboard</span> <span style="color:#63635e;font-style:italic">· 2 untouched</span><span style="color:#55554f"> ─┬─</span> <span style="color:#ecebe6;font-weight:700">docs</span> <span style="color:#9a9a93">1</span><span style="color:#55554f"> ───</span> <span style="color:#6aa1f2">◕</span> <span style="color:#ecebe6">api.md</span> <span style="color:#57c06c">+3 </span><span style="color:#f0726b">−1</span>
+                          <span style="color:#55554f">├─</span> <span style="color:#ecebe6;font-weight:700">server</span> <span style="color:#9a9a93">3</span> <span style="color:#63635e;font-style:italic">· 1 untouched</span><span style="color:#55554f"> ─┬─</span> <span style="color:#ecebe6;font-weight:700">db</span> <span style="color:#9a9a93">1</span><span style="color:#55554f"> ───</span> <span style="color:#6aa1f2">◕</span> <span style="color:#ecebe6">schema.ts</span> <span style="color:#57c06c">+5</span>
+                          <span style="color:#55554f">│</span>                          <span style="color:#55554f">├─</span> <span style="color:#ecebe6;font-weight:700">routes</span> <span style="color:#9a9a93">1</span> <span style="color:#63635e;font-style:italic">· 1 untouched</span><span style="color:#55554f"> ───</span> <span style="color:#6aa1f2">◕</span> <span style="color:#ecebe6">tasks.ts</span> <span style="color:#57c06c">+12 </span><span style="color:#f0726b">−4</span>
+                          <span style="color:#55554f">│</span>                          <span style="color:#55554f">╰─</span> <span style="color:#6aa1f2">◕</span> <span style="color:#ffffff;background:#4f6bed;font-weight:700">index.ts</span> <span style="color:#57c06c">+2 </span><span style="color:#f0726b">−2</span>
+                          <span style="color:#55554f">├─</span> <span style="color:#ecebe6;font-weight:700">shared</span> <span style="color:#9a9a93">1</span><span style="color:#55554f"> ───</span> <span style="color:#6aa1f2">◑</span> <span style="color:#ecebe6">types.ts</span> <span style="color:#57c06c">+4</span>
+                          <span style="color:#55554f">├─</span> <span style="color:#ecebe6;font-weight:700">tests</span> <span style="color:#9a9a93">1</span><span style="color:#55554f"> ───</span> <span style="color:#6aa1f2">◕</span> <span style="color:#ecebe6">tasks.test.ts</span> <span style="color:#57c06c">+9 </span><span style="color:#f0726b">−1</span>
+                          <span style="color:#55554f">╰─</span> <span style="color:#ecebe6;font-weight:700">web/src</span> <span style="color:#9a9a93">4</span> <span style="color:#63635e;font-style:italic">· 2 untouched</span><span style="color:#55554f"> ─┬─</span> <span style="color:#ecebe6;font-weight:700">components</span> <span style="color:#9a9a93">2</span> <span style="color:#63635e;font-style:italic">· 1 untouched</span><span style="color:#55554f"> ───</span> <span style="color:#57c06c">●</span> <span style="color:#ecebe6">DueDate.tsx</span> <span style="color:#57c06c">+7</span>
+                                                      <span style="color:#55554f">│</span>                                 <span style="color:#6aa1f2">◕</span> <span style="color:#ecebe6">TaskItem.tsx</span> <span style="color:#57c06c">+7 </span><span style="color:#f0726b">−1</span>
+                                                      <span style="color:#55554f">│</span>
+                                                      <span style="color:#55554f">╰─</span> <span style="color:#ecebe6;font-weight:700">pages</span> <span style="color:#9a9a93">2</span><span style="color:#55554f"> ───</span> <span style="color:#6aa1f2">◔</span> <span style="color:#ecebe6">Home.tsx</span> <span style="color:#57c06c">+1</span>
+                                                                     <span style="color:#57c06c">●</span> <span style="color:#ecebe6">Today.tsx</span> <span style="color:#57c06c">+14</span>
+
+<span style="color:#63635e"> j k move · l/enter open · h fold · s scope · o browser · ? help · q quit</span>
+</pre>
+      </div>
+      <div class="term reveal">
+        <div class="term-bar"><span class="dots"><i></i><i></i><i></i></span>herdr · graphdiff · diff</div>
+        <pre><span style="background:#1b1b1a"> </span><span style="color:#ecebe6;background:#1b1b1a;font-weight:700">taskboard</span><span style="background:#1b1b1a">  </span><span style="color:#9a9a93;background:#1b1b1a">due-dates → main</span><span style="background:#1b1b1a">  </span><span style="color:#1b1b1a;background:#ecebe6"> Branch </span><span style="color:#9a9a93;background:#1b1b1a"> Uncommitted  Session  Last prompt </span><span style="background:#1b1b1a">      </span><span style="color:#9a9a93;background:#1b1b1a">10 files </span><span style="color:#57c06c;background:#1b1b1a">+64 </span><span style="color:#f0726b;background:#1b1b1a">−9</span>
+ <span style="color:#ecebe6;font-weight:700">server/index.ts</span>  <span style="color:#57c06c">+2 </span><span style="color:#f0726b">−2</span>
+
+<span style="color:#63635e;opacity:.6">  ── lines 1–4 ────────────────────</span>
+<span style="color:#f0726b;background:#331817">    1       − </span><span style="color:#ecebe6;background:#331817">import { listTasks, createTask } from &quot;./routes/tasks&quot;;</span>
+<span style="color:#57c06c;background:#15291a">          1 + </span><span style="color:#ecebe6;background:#15291a">import { listTasks, createTask, reschedule } from &quot;./routes/tasks&quot;;</span>
+<span style="color:#63635e">    2     2   </span><span style="color:#9a9a93">import { health } from &quot;./routes/health&quot;;</span>
+<span style="color:#63635e">    3     3</span>
+<span style="color:#f0726b;background:#331817">    4       − </span><span style="color:#ecebe6;background:#331817">export const routes = { listTasks, createTask, health };</span>
+<span style="color:#57c06c;background:#15291a">          4 + </span><span style="color:#ecebe6;background:#15291a">export const routes = { listTasks, createTask, reschedule, health };</span>
+</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="install">
   <div class="wrap">
     <h2 class="reveal">Set it up in a minute</h2>
@@ -326,7 +376,7 @@ footer { padding-block: 40px calc(40px + env(safe-area-inset-bottom, 0px)); bord
 key = "prefix+g"
 type = "plugin_action"
 command = "graphdiff.open"</pre></div>
-      <div class="step reveal"><h3>Press <code>prefix+g</code></h3><p>In any pane inside a git repo. Your browser opens on the map, and it stays live while the agent works.</p></div>
+      <div class="step reveal"><h3>Press <code>prefix+g</code></h3><p>In any pane inside a git repo. Your browser opens on the map, and it stays live while the agent works. Add a <code>prefix+shift+g</code> binding for <code>graphdiff.tui</code> to get it in the terminal instead.</p></div>
     </div>
   </div>
 </section>

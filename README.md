@@ -111,10 +111,16 @@ already reviewed, it's flagged as "edited again".
 
 ### In the terminal
 
-Prefer to stay in herdr? `graphdiff.tui` opens the same map as text in an overlay: folders
+Prefer to stay in herdr? `prefix+shift+g` opens the same map right inside it, as an
+overlay over the pane you're in. Same scopes and live updates, drawn in text: folders
 branch with box-drawing lines, files sit in grids, dots fill `○ ◔ ◑ ◕ ●` with how much
-changed. `j` `k` move, `l`/Enter opens a coloured diff, `h` folds, `s` switches scope, `o`
-opens the browser view. It's live too. Bind it like the browser one:
+changed.
+
+![The map in a herdr overlay](docs/screenshots/terminal.png)
+
+`j` `k` move, `l` or Enter opens a coloured diff (`J` `K` for the next or previous file),
+`h` folds, `s` switches scope, `o` opens the same file in the browser, `?` lists the keys.
+Bind it next to the browser one:
 
 ```toml
 [[keys.command]]
