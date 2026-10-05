@@ -103,6 +103,9 @@ export async function startServer(): Promise<ServerInfo> {
   setInterval(() => {
     if (liveConnections.size === 0 && Date.now() - lastActivity > IDLE_MS) shutdown();
   }, 60_000).unref();
+  // One bad request or child process shouldn't take the page down for everyone.
+  process.on("uncaughtException", (e) => console.error("uncaught:", e));
+  process.on("unhandledRejection", (e) => console.error("unhandled rejection:", e));
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
   return info;

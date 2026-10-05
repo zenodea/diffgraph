@@ -159,6 +159,7 @@ async function runModel(repo: Repo, prompt: string): Promise<string | null> {
         resolve(null);
       }
     });
+    child.stdin.on("error", () => {});
     child.stdin.end(prompt);
   });
 }

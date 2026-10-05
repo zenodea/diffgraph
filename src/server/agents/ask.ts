@@ -243,5 +243,6 @@ async function runSideAgent(repo: Repo, thread: Thread, prompt: string) {
     if (msg.status === "error" && !msg.text.trim()) msg.text = stderr.trim().slice(-800) || `${command[0]} exited with ${code}`;
     publish(repo, thread);
   });
+  child.stdin!.on("error", () => {});
   child.stdin!.end(prompt);
 }

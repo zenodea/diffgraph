@@ -22,15 +22,20 @@ export async function run(cmd: string, args: string[], opts: RunOptions = {}): P
 export function runBytes(cmd: string, args: string[], opts: RunOptions = {}): Promise<{ code: number; stdout: Buffer; stderr: string }> {
   return new Promise((resolve) => {
     const env = opts.env ? { ...process.env, ...opts.env } : process.env;
-    const child = spawn(cmd, args, { cwd: opts.cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    // No stdin unless there's input: writing to a pipe the command never reads (it
+    // may already have exited) raises EPIPE, which used to take the server down.
+    const child = spawn(cmd, args, { cwd: opts.cwd, env, stdio: [opts.input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
     const out: Buffer[] = [];
     const err: Buffer[] = [];
-    child.stdout.on("data", (b) => out.push(b));
-    child.stderr.on("data", (b) => err.push(b));
+    child.stdout!.on("data", (b) => out.push(b));
+    child.stderr!.on("data", (b) => err.push(b));
     child.on("error", (e) => resolve({ code: -1, stdout: Buffer.alloc(0), stderr: String(e) }));
     child.on("close", (code) =>
       resolve({ code: code ?? -1, stdout: Buffer.concat(out), stderr: Buffer.concat(err).toString("utf8") }),
     );
-    child.stdin.end(opts.input ?? "");
+    if (child.stdin) {
+      child.stdin.on("error", () => {});
+      child.stdin.end(opts.input);
+    }
   });
 }
