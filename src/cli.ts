@@ -3,72 +3,23 @@
 //   serve  run the server in the foreground
 //   stop   stop a running server
 //   notify herdr event hook: tell you the shape of what an agent just changed
+//   tui    the map in the terminal (run in a herdr pane by the "tui" action)
 import { spawn } from "node:child_process";
-import { openSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { stateDir } from "./server/core/env.ts";
+import { connect, healthy, readInfo } from "./connect.ts";
 import { contextFromEnv, notify } from "./server/core/herdr.ts";
 import { run } from "./server/core/proc.ts";
-import { serverFile, type ServerInfo } from "./server/server.ts";
 
 const command = process.argv[2] ?? "open";
 
-function readInfo(): ServerInfo | null {
-  try {
-    return JSON.parse(readFileSync(serverFile, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-async function healthy(info: ServerInfo | null): Promise<boolean> {
-  if (!info) return false;
-  try {
-    const res = await fetch(`http://127.0.0.1:${info.port}/api/health`, { signal: AbortSignal.timeout(800) });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-async function ensureServer(): Promise<ServerInfo> {
-  const existing = readInfo();
-  if (await healthy(existing)) return existing!;
-
-  const log = openSync(join(stateDir, "server.log"), "a");
-  const child = spawn(process.execPath, [import.meta.filename, "serve"], {
-    detached: true,
-    stdio: ["ignore", log, log],
-    env: process.env,
-  });
-  child.unref();
-
-  for (let i = 0; i < 50; i++) {
-    await new Promise((r) => setTimeout(r, 100));
-    const info = readInfo();
-    if (info && info.pid === child.pid && (await healthy(info))) return info;
-  }
-  throw new Error(`server did not start; see ${join(stateDir, "server.log")}`);
-}
-
 async function open() {
   const ctx = contextFromEnv();
-  const top = await run("git", ["rev-parse", "--show-toplevel"], { cwd: ctx.cwd });
-  if (top.code !== 0) {
+  const conn = await connect(ctx.cwd, ctx.paneId, ctx.agent);
+  if (!conn) {
     await notify("graphdiff", `${ctx.cwd} is not inside a git repo`);
     process.exit(1);
   }
-  const root = top.stdout.trim();
-  const info = await ensureServer();
-  const base = `http://127.0.0.1:${info.port}`;
-  const res = await fetch(`${base}/api/register`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-graphdiff-token": info.token },
-    body: JSON.stringify({ root, paneId: ctx.paneId, agent: ctx.agent }),
-  });
-  if (!res.ok) throw new Error(`register failed: ${await res.text()}`);
-  const repo = (await res.json()) as { id: string };
-  const url = `${base}/r/${repo.id}?t=${info.token}`;
+  const { base, token, repo } = conn;
+  const url = `${base}/r/${repo.id}?t=${token}`;
   console.log(url);
   if (await focusExistingTab(`${base}/r/${repo.id}`)) return;
   const opener = process.platform === "darwin" ? "open" : "xdg-open";
@@ -137,6 +88,17 @@ async function focusExistingTab(prefix: string): Promise<boolean> {
   });
 }
 
+/** herdr action: open the terminal view in an overlay over the focused pane, for its repo. */
+async function openTuiPane() {
+  const ctx = contextFromEnv();
+  const herdr = process.env.HERDR_BIN_PATH ?? "herdr";
+  const args = ["plugin", "pane", "open", "--plugin", process.env.HERDR_PLUGIN_ID ?? "graphdiff", "--entrypoint", "tui", "--focus", "--cwd", ctx.cwd];
+  if (ctx.paneId) args.push("--env", `GRAPHDIFF_PANE=${ctx.paneId}`);
+  if (ctx.agent) args.push("--env", `GRAPHDIFF_AGENT=${ctx.agent}`);
+  const res = await run(herdr, args);
+  if (res.code !== 0) throw new Error(res.stderr.trim() || "herdr couldn't open the pane");
+}
+
 async function stop() {
   const info = readInfo();
   if (!(await healthy(info))) return console.log("graphdiff server is not running");
@@ -153,6 +115,11 @@ try {
     await startServer();
   } else if (command === "open") await open();
   else if (command === "stop") await stop();
+  else if (command === "tui-open") await openTuiPane();
+  else if (command === "tui") {
+    const { runTui } = await import("./tui/app.ts");
+    await runTui();
+  }
   else if (command === "notify") {
     // Runs on every agent status change: never make noise when something's off.
     const { notifyAgentDone } = await import("./server/notify.ts");

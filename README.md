@@ -109,6 +109,21 @@ already reviewed, it's flagged as "edited again".
 
 ![Review mode, with three files ticked off](docs/screenshots/review.png)
 
+### In the terminal
+
+Prefer to stay in herdr? `graphdiff.tui` opens the same map as text in an overlay: folders
+branch with box-drawing lines, files sit in grids, dots fill `○ ◔ ◑ ◕ ●` with how much
+changed. `j` `k` move, `l`/Enter opens a coloured diff, `h` folds, `s` switches scope, `o`
+opens the browser view. It's live too. Bind it like the browser one:
+
+```toml
+[[keys.command]]
+key = "prefix+shift+g"
+type = "plugin_action"
+command = "graphdiff.tui"
+description = "graphdiff in the terminal"
+```
+
 ## Keys
 
 | key | |
@@ -183,7 +198,9 @@ herdr plugin link "$PWD"
 
 ```
 src/
-  cli.ts            open / serve / stop / notify
+  cli.ts            open / serve / stop / notify / tui
+  connect.ts        find or start the server, register a repo
+  tui/              the terminal view
   server/
     core/           HTTP, live events, config, herdr
     git/            scopes, changed files, diffs

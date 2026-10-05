@@ -19,6 +19,18 @@ id = "open"
 title = "graphdiff: review changes"
 command = ["node", "src/cli.ts", "open"]
 
+# The map in the terminal, as an overlay over the focused pane.
+[[actions]]
+id = "tui"
+title = "graphdiff: map in the terminal"
+command = ["node", "src/cli.ts", "tui-open"]
+
+[[panes]]
+id = "tui"
+title = "graphdiff"
+placement = "overlay"
+command = ["node", "src/cli.ts", "tui"]
+
 # When an agent finishes a turn, a herdr notification says where it made changes.
 [[events]]
 on = "pane.agent_status_changed"
