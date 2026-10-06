@@ -45,13 +45,14 @@ way. Pan with two fingers, pinch to zoom, press `0` to fit, and move around with
 
 ### What each folder is for
 
-Knowing where things live is half of judging a change. Turn on **Guide** and every folder
-on the map gets one line on what it's *for*: "API endpoint handlers", "shared types used
-across the app". Your pane's agent writes them once from the folder tree, file names and
-README (read-only), and they're kept, so later only new folders need describing. In the
-terminal view, `i` does the same.
+Knowing where things live is half of judging a change. Hover any folder and its card says
+what the folder is *for*: "API endpoint handlers", "shared types used across the app".
+Hover a file and you get its change plus its folder's role. Your pane's agent writes these
+lines once from the folder tree, file names and README (read-only), and they're kept, so
+later only new folders need describing. In the terminal view the bottom bar shows the line
+for whatever you select, and `i` puts short notes next to every folder.
 
-![The Guide: what each folder is for, next to it on the map](docs/screenshots/guide.png)
+![Hovering a folder: what it's for, and how much changed in it](docs/screenshots/guide.png)
 
 ### What it just did
 
@@ -129,7 +130,7 @@ changed.
 ![The map in a herdr overlay](docs/screenshots/terminal.png)
 
 `j` `k` move, `l` or Enter opens a coloured diff (`J` `K` for the next or previous file),
-`h` folds, `s` switches scope, `i` shows the Guide, `o` opens the same file in the
+`h` folds, `s` switches scope, `i` toggles folder notes, `o` opens the same file in the
 browser, `?` lists the keys.
 Bind it next to the browser one:
 

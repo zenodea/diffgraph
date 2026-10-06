@@ -37,9 +37,11 @@ interface State {
   agent: string | null;
   message: string | null;
   help: boolean;
-  /** What each folder is for (the Guide), when switched on with i. */
+  /** What each folder is for (the Guide): always loaded, shown in the bottom bar. */
   guide: Record<string, string> | null;
   guidePending: string[];
+  /** Also show a short version next to each folder (i). */
+  guideInline: boolean;
 }
 
 export async function runTui(): Promise<void> {
@@ -68,8 +70,9 @@ export async function runTui(): Promise<void> {
     agent: null,
     message: null,
     help: false,
-    guide: null,
+    guide: {},
     guidePending: [],
+    guideInline: false,
   };
 
   const api = async <T>(path: string): Promise<T> => {
@@ -147,20 +150,15 @@ export async function runTui(): Promise<void> {
     if (g) {
       s.guide = g.folders;
       s.guidePending = g.pending;
-      s.message = "Describing folders…";
       draw();
     }
   };
-  const toggleGuide = async () => {
-    if (s.guide) {
-      s.guide = null;
-      return draw();
-    }
+  const loadGuide = async () => {
     const g = await api<{ folders: Record<string, string>; pending: string[] }>(repoApi("guide")).catch(() => null);
-    s.guide = g?.folders ?? {};
-    s.guidePending = g?.pending ?? [];
-    draw();
-    await fillGuide();
+    if (g) {
+      s.guide = g.folders;
+      s.guidePending = g.pending;
+    }
   };
 
   // Live: the same event stream the page uses.
@@ -191,7 +189,7 @@ export async function runTui(): Promise<void> {
               const g = JSON.parse(data);
               s.guide = g.folders;
               s.guidePending = g.pending;
-              if (!g.pending.length) s.message = null;
+
               draw();
             }
             if ((event === "agent" || event === "hello") && data) {
@@ -274,7 +272,7 @@ export async function runTui(): Promise<void> {
         s.changes = null;
         return void load();
       } else if (str === "r") return void load();
-      else if (str === "i") return void toggleGuide();
+      else if (str === "i") s.guideInline = !s.guideInline;
       else if (str === "o") openInBrowser(s, selectedStop()?.kind === "file" ? selectedStop()!.path : undefined);
       else return;
     }
@@ -297,6 +295,7 @@ export async function runTui(): Promise<void> {
     draw();
   });
   draw();
+  await loadGuide();
   await load();
   void listen();
 }
@@ -361,7 +360,7 @@ function bottomBar(s: State, W: number): string {
   const hints =
     s.view === "diff"
       ? "j k scroll · d u page · J K next/prev file · o browser · q back"
-      : "j k move · l/enter open · h fold · s scope · i guide · o browser · ? help · q quit";
+      : "j k move · l/enter open · h fold · s scope · i notes · o browser · ? help · q quit";
   return `${c.faint} ${hints}${reset}`;
 }
 
@@ -379,7 +378,7 @@ function helpLines(H: number): string[] {
     `  h             fold the folder you're in`,
     `  g G           first · last`,
     `  s, tab        next scope (branch, uncommitted, session, last prompt)`,
-    `  i             guide: what each folder is for`,
+    `  i             guide notes next to every folder (the bottom bar always has it)`,
     `  o             open this in the browser`,
     `  r             refresh`,
     `  q, esc        back · quit`,
@@ -395,12 +394,12 @@ function mapBody(s: State, W: number, H: number, setStops: (stops: Stop[]) => vo
     setStops([]);
     return ["", `  ${bold}Nothing changed${reset}`, `  ${c.muted}When the agent edits files, they'll appear here.`];
   }
-  let final = textMap(s.conn.repo.name, s.changes.files, s.entries, s.collapsed, s.sel, W - 2, undefined, s.guide);
+  let final = textMap(s.conn.repo.name, s.changes.files, s.entries, s.collapsed, s.sel, W - 2, undefined, s.guideInline ? s.guide : null);
   if (!s.sel || !final.stops.some((st) => key(st) === s.sel)) {
     // Nothing (valid) selected yet: pick the first file and lay out again to highlight it.
     const first = final.stops.find((st) => st.kind === "file") ?? final.stops[0];
     s.sel = first ? key(first) : null;
-    final = textMap(s.conn.repo.name, s.changes.files, s.entries, s.collapsed, s.sel, W - 2, undefined, s.guide);
+    final = textMap(s.conn.repo.name, s.changes.files, s.entries, s.collapsed, s.sel, W - 2, undefined, s.guideInline ? s.guide : null);
   }
   setStops(final.stops);
   const lines = renderRows(final.rows);

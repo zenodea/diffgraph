@@ -28,9 +28,9 @@ export function Help({ reviewMode }: { reviewMode: boolean }) {
             <li><i class="ld s-A" />added <i class="ld s-M" />modified <i class="ld s-D" />deleted <i class="ld s-R" />renamed</li>
             <li><i class="ld pie" />how much of the file changed</li>
             <li><i class="ld thick" />thicker branch: more changed down there</li>
-            <li><i class="ld ghost" />with Imports on: unchanged, but uses a changed file</li>
-            <li><i class="ld thick" style={{ opacity: 0.4 }} />with Guide on: the line next to a folder says what it's for</li>
+            <li><i class="ld ghost" />with Show → Imports: unchanged, but uses a changed file</li>
             <li><span class="news-tag">new</span> appeared or changed since you last looked</li>
+            <li>Hover a folder to see what it's for; Imports, Risks, Summary and colours are under Show</li>
             {reviewMode && <li><i class="ld done" />reviewed · <i class="ld again" />edited again since</li>}
           </ul>
           <h3>Moving around</h3>

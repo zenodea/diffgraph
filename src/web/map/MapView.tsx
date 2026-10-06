@@ -10,6 +10,7 @@ import { entriesByDir, layoutGraph, type GraphNode, type Placed } from "./graph.
 import { api, repoId } from "../lib/api.ts";
 import { useKeys, usePersisted } from "../lib/hooks.ts";
 import { usePanZoom } from "./panzoom.ts";
+import { HoverCard, ShowMenu } from "./MapChrome.tsx";
 import { plural } from "../lib/util.ts";
 
 interface Props {
@@ -328,7 +329,8 @@ export function MapView(props: Props) {
   useEffect(() => setHoveredSource(null), [colourBy]);
 
   // Guide: what each folder is for, written once by the pane's agent and cached.
-  const [showGuide, setShowGuide] = usePersisted("mapGuide", false);
+  // Always on: the lines show in the hover card, so they cost no space on the map.
+  const showGuide = true;
   const [guide, setGuide] = useState<Record<string, string>>({});
   const [guidePending, setGuidePending] = useState<string[]>([]);
   useEffect(() => {
@@ -364,8 +366,8 @@ export function MapView(props: Props) {
 
   const ghosts = showLinks && deps ? deps.dependents : [];
   const layout = useMemo(
-    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news, props.reviewMode, pips, risks, showGuide ? guide : null), ghosts),
-    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts, props.reviewMode, pips, risks, showGuide, guide],
+    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news, props.reviewMode, pips, risks, null), ghosts),
+    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts, props.reviewMode, pips, risks],
   );
   const links = useMemo(() => (showLinks && deps ? placeLinks(layout.nodes, deps) : []), [layout, deps, showLinks]);
   const dirPaths = layout.nodes.flatMap((n) => (n.node.kind === "dir" ? [n.node.path] : []));
@@ -384,6 +386,28 @@ export function MapView(props: Props) {
   const width = Math.max(layout.width, ...links.map((l) => l.right + 24));
   const focus = hovered ?? selected;
   const pz = usePanZoom();
+  // The hover card: what's under the pointer, and where to put the card.
+  const [card, setCard] = useState<{ kind: "dir" | "file"; path: string; x: number; y: number; below: boolean } | null>(null);
+  const cardTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const showCard = (el: Element | null) => {
+    clearTimeout(cardTimer.current);
+    if (!el || pz.dragging) return setCard(null);
+    const target = (el.closest(".gnode") ?? el) as Element;
+    const isDir = el.hasAttribute("data-dir") && !el.hasAttribute("data-path");
+    const path = (isDir ? el.getAttribute("data-dir") : el.getAttribute("data-path")) ?? "";
+    if (isDir && !path) return setCard(null);
+    const place = () => {
+      const box = canvasRef.current?.getBoundingClientRect();
+      const r = (target.querySelector("rect") ?? target).getBoundingClientRect();
+      if (!box) return;
+      const below = r.top - box.top < 150;
+      setCard({ kind: isDir ? "dir" : "file", path, x: Math.min(r.left - box.left, box.width - 340), y: below ? r.bottom - box.top + 8 : r.top - box.top - 8, below });
+    };
+    // A short delay so sweeping across the map doesn't flicker cards.
+    if (card) place();
+    else cardTimer.current = setTimeout(place, 180);
+  };
   const nodeAt = (pred: (n: Placed) => boolean) => layout.nodes.find(pred);
 
   const maxWeight = Math.max(1, ...layout.nodes.filter((n) => n.node.kind === "file" || n.node.kind === "dir").map((n) => n.weight));
@@ -531,7 +555,7 @@ export function MapView(props: Props) {
   return (
     <div class="map">
       <div class="map-main">
-      <div class="map-canvas">
+      <div class="map-canvas" ref={canvasRef}>
       <div class="map-tools">
         {props.news.size > 0 && (
           <button class="btn small news-clear" onClick={props.onClearNews} title="Clear the new / updated tags">
@@ -539,33 +563,23 @@ export function MapView(props: Props) {
             {props.news.size} new · clear
           </button>
         )}
-        <button class={`btn small ${showGuide ? "on" : ""}`} onClick={() => setShowGuide(!showGuide)} title="What each folder is for, written by your agent once and kept">
-          Guide{showGuide && guidePending.length ? " …" : ""}
-        </button>
-        <span class="seg-tools" role="group" aria-label="Colour the map by">
-          {(["prompt", "agent"] as const).map((by) => (
-            <button
-              key={by}
-              class={`btn small ${colourBy === by ? "on" : ""}`}
-              title={by === "prompt" ? "Colour files by the prompt that changed them" : "Colour files by the agent session that changed them"}
-              onClick={() => {
-                setColourBy(colourBy === by ? "off" : by);
-                if (colourBy !== by) setShowSummary(false);
-              }}
-            >
-              {by === "prompt" ? "Prompts" : "Agents"}
-            </button>
-          ))}
-        </span>
-        <button class={`btn small ${showSummary ? "on" : ""}`} onClick={() => { setShowSummary(!showSummary); if (!showSummary) setColourBy("off"); }} title="One-line summaries of what changed in each folder">
-          Summary
-        </button>
-        <button class={`btn small ${showRisks ? "on" : ""} ${showRisks && riskCount ? "warn" : ""}`} onClick={() => setShowRisks(!showRisks)} title="Flag things worth a second look: rewrites, big changes, broken imports, no tests">
-          Risks{showRisks && risks ? ` · ${riskCount}` : ""}
-        </button>
-        <button class={`btn small ${showLinks ? "on" : ""}`} onClick={() => setShowLinks(!showLinks)} title="Show which changed files import each other, and unchanged files that use them">
-          Imports
-        </button>
+        <ShowMenu
+          colourBy={colourBy}
+          setColourBy={(v) => {
+            setColourBy(v);
+            if (v !== "off") setShowSummary(false);
+          }}
+          showSummary={showSummary}
+          setShowSummary={(v) => {
+            setShowSummary(v);
+            if (v) setColourBy("off");
+          }}
+          showRisks={showRisks}
+          setShowRisks={setShowRisks}
+          riskCount={showRisks && risks ? riskCount : null}
+          showLinks={showLinks}
+          setShowLinks={setShowLinks}
+        />
         <button class={`btn small ${foldersOnly ? "on" : ""}`} onClick={() => setCollapsedList(foldersOnly ? [] : leafDirs())} title="Hide files and show just which folders changed">
           {foldersOnly ? "Show files" : "Folders only"}
         </button>
@@ -586,8 +600,15 @@ export function MapView(props: Props) {
           height={layout.height}
           role="tree"
           aria-label="Changed files as a map"
-          onMouseOver={(e) => setHovered((e.target as Element).closest?.("[data-path]")?.getAttribute("data-path") ?? null)}
-          onMouseLeave={() => setHovered(null)}
+          onMouseOver={(e) => {
+            const el = (e.target as Element).closest?.("[data-path], [data-dir]");
+            setHovered(el?.getAttribute("data-path") ?? null);
+            showCard(el);
+          }}
+          onMouseLeave={() => {
+            setHovered(null);
+            showCard(null);
+          }}
         >
           <defs>
             <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -663,7 +684,6 @@ export function MapView(props: Props) {
               focused={n.node.kind === "dir" && n.node.path === focusDir}
               pips={n.node.kind === "file" ? pips.get(n.node.path) : undefined}
               risk={n.node.kind === "file" ? risks?.files[n.node.path] : n.node.kind === "root" && risks?.overall.length ? risks.overall : undefined}
-              guide={showGuide && n.node.kind === "dir" ? (guide[n.node.path] ?? (guidePending.includes(n.node.path) ? "" : undefined)) : undefined}
               lit={!lit || (n.node.kind === "file" ? lit.has(n.node.path) : n.node.kind === "dir" || n.node.kind === "root" ? n.node.files.some((f) => lit.has(f.path)) : false)}
               onPath={onPath.has(n)}
               onToggle={toggleDir}
@@ -672,6 +692,22 @@ export function MapView(props: Props) {
         </svg>
         </div>
       </div>
+      {card && (
+        <HoverCard
+          card={card}
+          files={files}
+          guide={guide}
+          guidePending={guidePending}
+          untouched={(() => {
+            const n = layout.nodes.find((x) => x.node.kind === "dir" && x.node.path === card.path)?.node;
+            return n && n.kind === "dir" ? n.untouched : 0;
+          })()}
+          reviewMode={props.reviewMode}
+          risks={risks?.files[card.path]}
+          threads={props.threadCounts.get(card.path) ?? 0}
+          news={props.news.get(card.path)}
+        />
+      )}
       </div>
       {colourBy !== "off" && (
         <SourcePanel by={colourBy} sources={sources} onHover={setHoveredSource} />
@@ -702,7 +738,6 @@ type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: str
 function RiskMark({ x, y, reasons }: { x: number; y: number; reasons: string[] }) {
   return (
     <g class="risk" transform={`translate(${x}, ${y})`}>
-      <title>{reasons.join("\n")}</title>
       <path d="M8 -7 L15.5 6.5 H0.5 Z" />
       <path class="bang" d="M8 -2.5 V2 M8 4.3 V4.4" />
     </g>
@@ -742,13 +777,6 @@ function NodeBody(props: NodeProps) {
         role="treeitem"
         aria-expanded={n.kind === "dir" ? !n.collapsed : true}
       >
-        <title>
-          {n.kind === "dir" ? `${n.path}\n` : ""}
-          {props.guide ? `${props.guide}\n` : ""}
-          {plural(n.files.length, "changed file")}
-          {props.reviewMode ? `, ${d} reviewed` : ""}
-          {n.kind === "dir" ? `\nClick to ${n.collapsed ? "expand" : "collapse"}` : ""}
-        </title>
         <rect x={p.x} y={top} width={pillW} height={24} rx={12} />
         {/* Review progress along the bottom of the pill. */}
         {props.reviewMode && <rect class="pill-progress" x={p.x + 10} y={top + 20} width={n.files.length ? Math.max(0, (p.width - 20) * (d / n.files.length)) : 0} height={2} rx={1} />}
@@ -770,7 +798,6 @@ function NodeBody(props: NodeProps) {
         )}
         {n.kind === "dir" && n.files.some((f) => props.news.has(f.path)) && (
           <circle cx={p.x + pillW - 11} cy={p.y} r={3.5} class="news-pip">
-            <title>Something here is new since you last looked</title>
           </circle>
         )}
         {props.guide && (
@@ -785,7 +812,6 @@ function NodeBody(props: NodeProps) {
   if (n.kind === "ghost") {
     return (
       <g class="gnode ghost" data-path={n.path}>
-        <title>{n.path}{"\n"}Not changed, but it imports a file that was. Hover to see which.</title>
         <circle cx={p.x + 7} cy={p.y} r={5} />
         <text x={p.x + 22} y={p.y + 4.5}>
           {n.name}
@@ -814,11 +840,6 @@ function NodeBody(props: NodeProps) {
       aria-selected={selected}
       onClick={() => props.onOpen(f.path)}
     >
-      <title>
-        {f.path}
-        {f.oldPath ? `\n(renamed from ${f.oldPath})` : ""}
-        {"\nClick to open the diff"}
-      </title>
       <rect class="hit" x={p.x - 6} y={top - 1} width={p.width + 12} height={26} rx={6} />
       <g
         class={`dot ${props.reviewMode ? "clickable" : ""}`}
@@ -828,10 +849,6 @@ function NodeBody(props: NodeProps) {
           props.onReview([f], f.review !== "reviewed");
         }}
       >
-        <title>
-          {f.status === "A" ? "New file" : f.status === "D" ? "Deleted" : `${pct(share)} of the file changed`}
-          {!props.reviewMode ? "" : f.review === "reviewed" ? "\nReviewed. Click to undo" : "\nClick to mark reviewed"}
-        </title>
         <circle cx={p.x + 7} cy={p.y} r={10} class="dot-hit" />
         {f.review === "reviewed" ? (
           <>
@@ -877,7 +894,6 @@ function NodeBody(props: NodeProps) {
           extraX += w + 8;
           return (
             <g class="news-tag-svg">
-              <title>{kind === "new" ? "Appeared since you last looked" : "Changed since you last looked"}</title>
               <rect x={x} y={p.y - 9} width={w} height={18} rx={9} />
               <text x={x + w / 2} y={p.y + 3.5} text-anchor="middle">
                 {kind}
@@ -899,7 +915,6 @@ function NodeBody(props: NodeProps) {
         })()}
       {threads > 0 && (
         <g class="qcount">
-          <title>{plural(threads, "question")} asked here</title>
           <path d={`M${extraX + 0.5},${p.y - 5.5} h11 v7 h-6 l-3,2.5 v-2.5 h-2 z`} />
           <text x={extraX + 15} y={p.y + 4}>
             {threads}

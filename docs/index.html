@@ -260,7 +260,7 @@ footer { padding-block: 40px calc(40px + env(safe-area-inset-bottom, 0px)); bord
       <div class="feature reveal">
         <svg viewBox="0 0 30 30" fill="none" stroke="#e8a33d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h7l2 3h13v14H4z"/><path d="M9 17h12M9 21h8"/></svg>
         <h3>What each folder is for</h3>
-        <p>Turn on the Guide and every folder gets a line on its role, written once by your agent. Learn a codebase as you review it.</p>
+        <p>Hover any folder for a line on its role, written once by your agent. Learn a codebase as you review it.</p>
       </div>
       <div class="feature reveal">
         <svg viewBox="0 0 30 30" fill="none" stroke="#b394f5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h20v12H13l-5 4v-4H5z"/></svg>
@@ -301,8 +301,8 @@ footer { padding-block: 40px calc(40px + env(safe-area-inset-bottom, 0px)); bord
         <img src="screenshots/map.png" alt="The map of a change: server, shared, tests and web/src branching to changed files" loading="lazy" width="2560" height="1520">
       </div>
       <div class="shot reveal">
-        <div class="shot-text"><h3>What each folder is for</h3><p>The Guide puts a line next to every folder on its role in the codebase, so you can tell at a glance whether a change landed where it should.</p></div>
-        <img src="screenshots/guide.png" alt="The map with a one-line description next to each folder" loading="lazy" width="2560" height="1520">
+        <div class="shot-text"><h3>What each folder is for</h3><p>Hover a folder and its card says what it's for in the codebase, so you can tell whether a change landed where it should.</p></div>
+        <img src="screenshots/guide.png" alt="Hovering a folder shows what it is for and how much changed in it" loading="lazy" width="2560" height="1520">
       </div>
       <div class="shot reveal">
         <div class="shot-text"><h3>Who depends on it</h3><p>Hovering <code>shared/types.ts</code> lights up everything that imports it, including files the agent never touched.</p></div>
@@ -331,7 +331,7 @@ footer { padding-block: 40px calc(40px + env(safe-area-inset-bottom, 0px)); bord
 <section id="terminal">
   <div class="wrap">
     <h2 class="reveal">Or stay in the terminal</h2>
-    <p class="sub reveal"><kbd class="k">prefix+shift+g</kbd> opens the same map right inside herdr, as an overlay over the pane you're in. Same scopes, same live updates, drawn in text: folders branch with box lines, files sit in grids, dots fill <code>○ ◔ ◑ ◕ ●</code>. <kbd class="k">j</kbd> <kbd class="k">k</kbd> to move, Enter for the diff, <kbd class="k">i</kbd> for the Guide, <kbd class="k">o</kbd> to jump to the browser.</p>
+    <p class="sub reveal"><kbd class="k">prefix+shift+g</kbd> opens the same map right inside herdr, as an overlay over the pane you're in. Same scopes, same live updates, drawn in text: folders branch with box lines, files sit in grids, dots fill <code>○ ◔ ◑ ◕ ●</code>. <kbd class="k">j</kbd> <kbd class="k">k</kbd> to move, Enter for the diff, <kbd class="k">i</kbd> for folder notes, <kbd class="k">o</kbd> to jump to the browser.</p>
     <div class="terms">
       <div class="term reveal">
         <div class="term-bar"><span class="dots"><i></i><i></i><i></i></span>herdr · graphdiff</div>
