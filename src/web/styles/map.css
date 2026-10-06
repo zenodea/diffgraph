@@ -150,3 +150,7 @@
 .risk .bang { fill: none; stroke: var(--warn); stroke-width: 1.6; stroke-linecap: round; }
 .risk { animation: fade-in 0.3s ease both; }
 .map-tools .btn.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 60%, transparent); }
+
+/* Guide: what each folder is for */
+.guide-text { fill: var(--muted); font: italic 12px var(--font); pointer-events: none; }
+.gnode.dir.hot .guide-text { fill: var(--text); }

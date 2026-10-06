@@ -12,6 +12,7 @@ import { repoOr404 } from "./core/repos.ts";
 import { setReviewed, sinceReview, withReviews } from "./review/review.ts";
 import { getSummaries } from "./agents/summaries.ts";
 import { sources } from "./agents/sources.ts";
+import { describeFolders, getGuide } from "./agents/guide.ts";
 import { whyFor } from "./agents/why.ts";
 
 route("GET", "/api/repos/:id/changes", async ({ params, url }) => {
@@ -99,4 +100,12 @@ route("GET", "/api/repos/:id/sources", async ({ params, url }) => {
 route("GET", "/api/repos/:id/risks", async ({ params, url }) => {
   const repo = repoOr404(params.id);
   return risks(repo, await getChanges(repo, parseScope(url.searchParams.get("scope"))));
+});
+
+route("GET", "/api/repos/:id/guide", ({ params }) => getGuide(repoOr404(params.id)));
+
+route("POST", "/api/repos/:id/guide", async ({ params, body }) => {
+  const { folders } = await body();
+  if (!Array.isArray(folders)) throw new HttpError(400, "folders required");
+  return describeFolders(repoOr404(params.id), folders.map(String));
 });

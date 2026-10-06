@@ -41,6 +41,7 @@ export function useLive(handlers: LiveHandlers): Live {
     es.addEventListener("agent", (e) => setAgent(data(e).agent));
     // The map listens for these itself.
     es.addEventListener("summary", (e) => dispatchEvent(new CustomEvent("graphdiff:summary", { detail: data(e) })));
+    es.addEventListener("guide", (e) => dispatchEvent(new CustomEvent("graphdiff:guide", { detail: data(e) })));
     es.addEventListener("superseded", () => setSuperseded(true));
     es.onerror = () => setConnected(false);
     return () => es.close();

@@ -37,6 +37,9 @@ interface State {
   agent: string | null;
   message: string | null;
   help: boolean;
+  /** What each folder is for (the Guide), when switched on with i. */
+  guide: Record<string, string> | null;
+  guidePending: string[];
 }
 
 export async function runTui(): Promise<void> {
@@ -65,6 +68,8 @@ export async function runTui(): Promise<void> {
     agent: null,
     message: null,
     help: false,
+    guide: null,
+    guidePending: [],
   };
 
   const api = async <T>(path: string): Promise<T> => {
@@ -114,6 +119,7 @@ export async function runTui(): Promise<void> {
       if (s.scope === "session" || s.scope === "prompt") s.scope = "branch";
     }
     draw();
+    void fillGuide();
   };
 
   const openDiff = async (path: string, keepScroll = false) => {
@@ -126,6 +132,35 @@ export async function runTui(): Promise<void> {
     if (!keepScroll) s.diffScroll = 0;
     s.view = "diff";
     draw();
+  };
+
+  const post = async <T>(path: string, body: unknown): Promise<T> => {
+    const res = await fetch(`${conn.base}${path}`, { method: "POST", headers: { "x-graphdiff-token": conn.token, "content-type": "application/json" }, body: JSON.stringify(body) });
+    return (await res.json()) as T;
+  };
+  // Describe whichever folders on screen don't have a Guide line yet (one call for all).
+  const fillGuide = async () => {
+    if (!s.guide) return;
+    const missing = lastStops.filter((st) => st.kind === "dir" && !(st.path in s.guide!) && !s.guidePending.includes(st.path)).map((st) => st.path);
+    if (!missing.length) return;
+    const g = await post<{ folders: Record<string, string>; pending: string[] }>(repoApi("guide"), { folders: missing }).catch(() => null);
+    if (g) {
+      s.guide = g.folders;
+      s.guidePending = g.pending;
+      s.message = "Describing folders…";
+      draw();
+    }
+  };
+  const toggleGuide = async () => {
+    if (s.guide) {
+      s.guide = null;
+      return draw();
+    }
+    const g = await api<{ folders: Record<string, string>; pending: string[] }>(repoApi("guide")).catch(() => null);
+    s.guide = g?.folders ?? {};
+    s.guidePending = g?.pending ?? [];
+    draw();
+    await fillGuide();
   };
 
   // Live: the same event stream the page uses.
@@ -152,6 +187,13 @@ export async function runTui(): Promise<void> {
             const event = /^event: (.*)$/m.exec(chunk)?.[1];
             const data = /^data: (.*)$/m.exec(chunk)?.[1];
             if (event === "changes" || event === "hello") scheduleLoad();
+            if (event === "guide" && data && s.guide) {
+              const g = JSON.parse(data);
+              s.guide = g.folders;
+              s.guidePending = g.pending;
+              if (!g.pending.length) s.message = null;
+              draw();
+            }
             if ((event === "agent" || event === "hello") && data) {
               s.agent = JSON.parse(data).agent;
               draw();
@@ -232,6 +274,7 @@ export async function runTui(): Promise<void> {
         s.changes = null;
         return void load();
       } else if (str === "r") return void load();
+      else if (str === "i") return void toggleGuide();
       else if (str === "o") openInBrowser(s, selectedStop()?.kind === "file" ? selectedStop()!.path : undefined);
       else return;
     }
@@ -308,10 +351,17 @@ function topBar(s: State, W: number): string {
 
 function bottomBar(s: State, W: number): string {
   if (s.message) return truncate(`${c.warn} ${s.message}`, W);
+  if (s.guide && s.view === "map" && s.sel) {
+    // The selected folder's full Guide line (or the folder of the selected file).
+    const path = s.sel.slice(2);
+    const folder = s.sel.startsWith("d:") ? path : path.split("/").slice(0, -1).join("/");
+    const line = s.guide[folder];
+    if (line) return truncate(` ${c.accent}${folder}/${reset} ${c.text}${line}${reset}`, W);
+  }
   const hints =
     s.view === "diff"
       ? "j k scroll · d u page · J K next/prev file · o browser · q back"
-      : "j k move · l/enter open · h fold · s scope · o browser · ? help · q quit";
+      : "j k move · l/enter open · h fold · s scope · i guide · o browser · ? help · q quit";
   return `${c.faint} ${hints}${reset}`;
 }
 
@@ -329,6 +379,7 @@ function helpLines(H: number): string[] {
     `  h             fold the folder you're in`,
     `  g G           first · last`,
     `  s, tab        next scope (branch, uncommitted, session, last prompt)`,
+    `  i             guide: what each folder is for`,
     `  o             open this in the browser`,
     `  r             refresh`,
     `  q, esc        back · quit`,
@@ -344,12 +395,12 @@ function mapBody(s: State, W: number, H: number, setStops: (stops: Stop[]) => vo
     setStops([]);
     return ["", `  ${bold}Nothing changed${reset}`, `  ${c.muted}When the agent edits files, they'll appear here.`];
   }
-  let final = textMap(s.conn.repo.name, s.changes.files, s.entries, s.collapsed, s.sel, W - 2);
+  let final = textMap(s.conn.repo.name, s.changes.files, s.entries, s.collapsed, s.sel, W - 2, undefined, s.guide);
   if (!s.sel || !final.stops.some((st) => key(st) === s.sel)) {
     // Nothing (valid) selected yet: pick the first file and lay out again to highlight it.
     const first = final.stops.find((st) => st.kind === "file") ?? final.stops[0];
     s.sel = first ? key(first) : null;
-    final = textMap(s.conn.repo.name, s.changes.files, s.entries, s.collapsed, s.sel, W - 2);
+    final = textMap(s.conn.repo.name, s.changes.files, s.entries, s.collapsed, s.sel, W - 2, undefined, s.guide);
   }
   setStops(final.stops);
   const lines = renderRows(final.rows);

@@ -48,11 +48,15 @@ function fileLabel(f: ReviewedFile, selected: boolean, news?: string): string {
   return `${pie(f)} ${shownName}${reset} ${stats}${reset}${again}${tag}`;
 }
 
-function dirLabel(name: string, count: number, untouched: number, collapsed: boolean, selected: boolean, root = false): string {
+// Short inline (the full line is in the bottom bar for whatever you select), so the map still fits.
+const GUIDE_MAX = 24;
+
+function dirLabel(name: string, count: number, untouched: number, collapsed: boolean, selected: boolean, root = false, guide?: string): string {
   const sel = selected ? `${c.selBg}` : "";
   const label = root ? `${bold}${c.text}${name}` : selected ? `${sel}${bold}${name} ${count}` : `${bold}${c.text}${name}${reset} ${c.muted}${count}`;
   const more = untouched ? ` ${c.faint}${italic}· ${untouched} untouched` : "";
-  return `${sel}${label}${collapsed ? ` ${c.muted}▸` : ""}${reset}${more}${reset}`;
+  const note = guide ? `  ${c.muted}${italic}${guide.length > GUIDE_MAX ? guide.slice(0, GUIDE_MAX - 1).trimEnd() + "…" : guide}` : "";
+  return `${sel}${label}${collapsed ? ` ${c.muted}▸` : ""}${reset}${more}${reset}${note}${reset}`;
 }
 
 /** Lays out `files` as a branching text map no wider than `maxWidth` where it can help it. */
@@ -64,6 +68,7 @@ export function textMap(
   selected: string | null,
   maxWidth: number,
   news: Map<string, string> = new Map(),
+  guide: Record<string, string> | null = null,
 ): TextMap {
   const top: Dir = { name: "", path: "", dirs: new Map(), files: [] };
   for (const f of files) {
@@ -100,7 +105,7 @@ export function textMap(
       name = `${name}/${d.name}`;
     }
     const isCollapsed = !root && collapsed.has(d.path);
-    const label = dirLabel(root ? repoName : name, all(d).length, untouched(d), isCollapsed, selected === `d:${d.path}`, root);
+    const label = dirLabel(root ? repoName : name, all(d).length, untouched(d), isCollapsed, selected === `d:${d.path}`, root, root ? undefined : guide?.[d.path]);
     put(row, col, label);
     const w = width(label);
     if (!root) stops.push({ kind: "dir", path: d.path, row, col, width: w });

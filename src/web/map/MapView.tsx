@@ -89,7 +89,14 @@ function dirMeta(files: ReviewedFile[], reviewMode: boolean) {
 
 const RISK_W = 24;
 
-function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>, reviewMode: boolean, pips: Map<string, string[]>, risks: Risks | null): number {
+const GUIDE_FONT = `italic 12px ${FONT.slice(5)}`;
+const GUIDE_MAX = 46;
+/** The Guide's line for a folder, shortened to sit next to its pill (the full line is in the tooltip). */
+const guideShort = (text: string) => (text.length > GUIDE_MAX ? text.slice(0, GUIDE_MAX - 1).trimEnd() + "…" : text);
+// 12px before the line, 12px after it so the branch doesn't touch the text.
+const guideWidth = (text: string | undefined) => (text ? 24 + textWidth(guideShort(text), GUIDE_FONT) : 0);
+
+function measure(node: GraphNode, threads: Map<string, number>, news: Map<string, string>, reviewMode: boolean, pips: Map<string, string[]>, risks: Risks | null, guide: Record<string, string> | null): number {
   switch (node.kind) {
     case "root":
       return (
@@ -100,7 +107,8 @@ function measure(node: GraphNode, threads: Map<string, number>, news: Map<string
       return (
         textWidth(node.name, BOLD) + 10 + textWidth(dirMeta(node.files, reviewMode), SMALL) + (node.collapsed ? 16 : 0) + 26 +
         (node.untouched ? 8 + textWidth(untouchedText(node.untouched), UNTOUCHED) : 0) +
-        (node.files.some((f) => news.has(f.path)) ? 12 : 0)
+        (node.files.some((f) => news.has(f.path)) ? 12 : 0) +
+        guideWidth(guide?.[node.path])
       );
     case "file": {
       const f = node.file;
@@ -319,6 +327,25 @@ export function MapView(props: Props) {
   const lit = hoveredSrc ? new Set(hoveredSrc.files) : null;
   useEffect(() => setHoveredSource(null), [colourBy]);
 
+  // Guide: what each folder is for, written once by the pane's agent and cached.
+  const [showGuide, setShowGuide] = usePersisted("mapGuide", false);
+  const [guide, setGuide] = useState<Record<string, string>>({});
+  const [guidePending, setGuidePending] = useState<string[]>([]);
+  useEffect(() => {
+    if (!showGuide) return;
+    api<{ folders: Record<string, string>; pending: string[] }>(`/api/repos/${repoId}/guide`).then((g) => {
+      setGuide(g.folders);
+      setGuidePending(g.pending);
+    }, () => {});
+    const on = (e: Event) => {
+      const g = (e as CustomEvent).detail;
+      setGuide(g.folders);
+      setGuidePending(g.pending);
+    };
+    addEventListener("graphdiff:guide", on);
+    return () => removeEventListener("graphdiff:guide", on);
+  }, [showGuide]);
+
   // Risk hints: things worth a second look, when you ask for them.
   const [showRisks, setShowRisks] = usePersisted("mapRisks", false);
   const [risks, setRisks] = useState<Risks | null>(null);
@@ -337,10 +364,23 @@ export function MapView(props: Props) {
 
   const ghosts = showLinks && deps ? deps.dependents : [];
   const layout = useMemo(
-    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news, props.reviewMode, pips, risks), ghosts),
-    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts, props.reviewMode, pips, risks],
+    () => layoutGraph(props.repoName, files, entries, collapsed, (n) => measure(n, props.threadCounts, props.news, props.reviewMode, pips, risks, showGuide ? guide : null), ghosts),
+    [files, entries, collapsed, props.threadCounts, props.repoName, props.news, ghosts, props.reviewMode, pips, risks, showGuide, guide],
   );
   const links = useMemo(() => (showLinks && deps ? placeLinks(layout.nodes, deps) : []), [layout, deps, showLinks]);
+  const dirPaths = layout.nodes.flatMap((n) => (n.node.kind === "dir" ? [n.node.path] : []));
+  const missingGuide = showGuide ? dirPaths.filter((d) => !(d in guide) && !guidePending.includes(d)) : [];
+  const missingKey = missingGuide.join("|");
+  useEffect(() => {
+    if (!missingGuide.length) return;
+    const t = setTimeout(() => {
+      api<{ folders: Record<string, string>; pending: string[] }>(`/api/repos/${repoId}/guide`, { body: { folders: missingGuide } }).then((g) => {
+        setGuide(g.folders);
+        setGuidePending(g.pending);
+      }, () => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [missingKey]);
   const width = Math.max(layout.width, ...links.map((l) => l.right + 24));
   const focus = hovered ?? selected;
   const pz = usePanZoom();
@@ -499,6 +539,9 @@ export function MapView(props: Props) {
             {props.news.size} new · clear
           </button>
         )}
+        <button class={`btn small ${showGuide ? "on" : ""}`} onClick={() => setShowGuide(!showGuide)} title="What each folder is for, written by your agent once and kept">
+          Guide{showGuide && guidePending.length ? " …" : ""}
+        </button>
         <span class="seg-tools" role="group" aria-label="Colour the map by">
           {(["prompt", "agent"] as const).map((by) => (
             <button
@@ -620,6 +663,7 @@ export function MapView(props: Props) {
               focused={n.node.kind === "dir" && n.node.path === focusDir}
               pips={n.node.kind === "file" ? pips.get(n.node.path) : undefined}
               risk={n.node.kind === "file" ? risks?.files[n.node.path] : n.node.kind === "root" && risks?.overall.length ? risks.overall : undefined}
+              guide={showGuide && n.node.kind === "dir" ? (guide[n.node.path] ?? (guidePending.includes(n.node.path) ? "" : undefined)) : undefined}
               lit={!lit || (n.node.kind === "file" ? lit.has(n.node.path) : n.node.kind === "dir" || n.node.kind === "root" ? n.node.files.some((f) => lit.has(f.path)) : false)}
               onPath={onPath.has(n)}
               onToggle={toggleDir}
@@ -652,7 +696,7 @@ export function MapView(props: Props) {
   );
 }
 
-type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void; focused?: boolean; pips?: string[]; lit?: boolean; risk?: string[] };
+type NodeProps = Props & { placed: Placed; onPath: boolean; onToggle: (path: string) => void; focused?: boolean; pips?: string[]; lit?: boolean; risk?: string[]; guide?: string };
 
 /** A small warning triangle; the reasons show on hover. */
 function RiskMark({ x, y, reasons }: { x: number; y: number; reasons: string[] }) {
@@ -688,6 +732,8 @@ function NodeBody(props: NodeProps) {
     const all = d === n.files.length;
     const meta = n.kind === "dir" ? dirMeta(n.files, props.reviewMode) : "";
     const nameW = textWidth(n.name, n.kind === "root" ? `700 15px ${FONT.slice(5)}` : BOLD);
+    // The measured width includes the Guide line, which sits outside the pill.
+    const pillW = p.width - (props.guide ? guideWidth(props.guide) : 0);
     return (
       <g
         class={`gnode ${n.kind} ${props.focused ? "focused" : ""} ${n.files.length === 0 ? "context" : all && props.reviewMode ? "all-done" : ""} ${props.onPath ? "hot" : ""} ${n.kind === "dir" && n.collapsed ? "collapsed" : ""}`}
@@ -698,11 +744,12 @@ function NodeBody(props: NodeProps) {
       >
         <title>
           {n.kind === "dir" ? `${n.path}\n` : ""}
+          {props.guide ? `${props.guide}\n` : ""}
           {plural(n.files.length, "changed file")}
           {props.reviewMode ? `, ${d} reviewed` : ""}
           {n.kind === "dir" ? `\nClick to ${n.collapsed ? "expand" : "collapse"}` : ""}
         </title>
-        <rect x={p.x} y={top} width={p.width} height={24} rx={12} />
+        <rect x={p.x} y={top} width={pillW} height={24} rx={12} />
         {/* Review progress along the bottom of the pill. */}
         {props.reviewMode && <rect class="pill-progress" x={p.x + 10} y={top + 20} width={n.files.length ? Math.max(0, (p.width - 20) * (d / n.files.length)) : 0} height={2} rx={1} />}
         <text x={p.x + 13} y={p.y + 4.5} class="pill-name">
@@ -722,9 +769,14 @@ function NodeBody(props: NodeProps) {
           </text>
         )}
         {n.kind === "dir" && n.files.some((f) => props.news.has(f.path)) && (
-          <circle cx={p.x + p.width - 11} cy={p.y} r={3.5} class="news-pip">
+          <circle cx={p.x + pillW - 11} cy={p.y} r={3.5} class="news-pip">
             <title>Something here is new since you last looked</title>
           </circle>
+        )}
+        {props.guide && (
+          <text x={p.x + pillW + 12} y={p.y + 4} class="guide-text">
+            {guideShort(props.guide)}
+          </text>
         )}
       </g>
     );
