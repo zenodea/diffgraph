@@ -43,6 +43,16 @@ It's live: as the agent writes, files flash, new ones appear and the rest glide 
 way. Pan with two fingers, pinch to zoom, press `0` to fit, and move around with
 `h` `j` `k` `l`.
 
+### What each folder is for
+
+Knowing where things live is half of judging a change. Turn on **Guide** and every folder
+on the map gets one line on what it's *for*: "API endpoint handlers", "shared types used
+across the app". Your pane's agent writes them once from the folder tree, file names and
+README (read-only), and they're kept, so later only new folders need describing. In the
+terminal view, `i` does the same.
+
+![The Guide: what each folder is for, next to it on the map](docs/screenshots/guide.png)
+
 ### What it just did
 
 The **Last prompt** scope shows only what the agent changed for your latest prompt. And
@@ -119,7 +129,8 @@ changed.
 ![The map in a herdr overlay](docs/screenshots/terminal.png)
 
 `j` `k` move, `l` or Enter opens a coloured diff (`J` `K` for the next or previous file),
-`h` folds, `s` switches scope, `o` opens the same file in the browser, `?` lists the keys.
+`h` folds, `s` switches scope, `i` shows the Guide, `o` opens the same file in the
+browser, `?` lists the keys.
 Bind it next to the browser one:
 
 ```toml

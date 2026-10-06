@@ -29,6 +29,7 @@ export function Help({ reviewMode }: { reviewMode: boolean }) {
             <li><i class="ld pie" />how much of the file changed</li>
             <li><i class="ld thick" />thicker branch: more changed down there</li>
             <li><i class="ld ghost" />with Imports on: unchanged, but uses a changed file</li>
+            <li><i class="ld thick" style={{ opacity: 0.4 }} />with Guide on: the line next to a folder says what it's for</li>
             <li><span class="news-tag">new</span> appeared or changed since you last looked</li>
             {reviewMode && <li><i class="ld done" />reviewed · <i class="ld again" />edited again since</li>}
           </ul>
